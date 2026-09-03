@@ -17,7 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MobileNav } from "@/components/app-shell/mobile-nav";
+import { MobileMenuButton } from "@/components/app-shell/mobile-nav";
 
 const COMMANDS = [
   { href: "/app/invoices/new", label: "Create invoice" },
@@ -91,7 +91,7 @@ export function Topbar({
 
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-card/90 px-3 backdrop-blur-sm lg:px-5">
-      <MobileNav organizationName={organizationName} />
+      <MobileMenuButton organizationName={organizationName} />
       <button
         type="button"
         onClick={() => setOpen(true)}

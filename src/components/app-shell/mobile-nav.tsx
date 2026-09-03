@@ -11,16 +11,16 @@ import { NavLink } from "@/components/app-shell/sidebar";
 import { isNavActive, MOBILE_TABS, NAV } from "@/components/app-shell/nav";
 import { cn } from "@/lib/utils";
 
-export function MobileNav({ organizationName }: { organizationName: string }) {
+export function MobileMenuButton({ organizationName }: { organizationName: string }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   return (
     <>
       <Button
         type="button"
-        variant="ghost"
+        variant="outline"
         size="icon"
-        className="shrink-0 lg:hidden"
+        className="shrink-0 border-border/80 bg-background lg:hidden"
         aria-label="Open navigation"
         onClick={() => setOpen(true)}
       >
@@ -50,27 +50,33 @@ export function MobileNav({ organizationName }: { organizationName: string }) {
           </nav>
         </SheetContent>
       </Sheet>
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm lg:hidden">
-        <div className="grid grid-cols-4">
-          {MOBILE_TABS.map((tab) => {
-            const Icon = tab.icon;
-            const active = isNavActive(pathname, tab.href);
-            return (
-              <Link
-                key={tab.href}
-                href={tab.href}
-                className={cn(
-                  "flex flex-col items-center gap-1 py-2.5 text-[11px]",
-                  active ? "font-medium text-primary" : "text-muted-foreground",
-                )}
-              >
-                <Icon className="size-4.5" />
-                {tab.label}
-              </Link>
-            );
-          })}
-        </div>
-      </nav>
     </>
+  );
+}
+
+export function MobileBottomNav() {
+  const pathname = usePathname();
+  return (
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm lg:hidden">
+      <div className="grid grid-cols-4">
+        {MOBILE_TABS.map((tab) => {
+          const Icon = tab.icon;
+          const active = isNavActive(pathname, tab.href);
+          return (
+            <Link
+              key={tab.href}
+              href={tab.href}
+              className={cn(
+                "flex flex-col items-center gap-1 py-2.5 text-[11px]",
+                active ? "font-medium text-primary" : "text-muted-foreground",
+              )}
+            >
+              <Icon className="size-4.5" />
+              {tab.label}
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
   );
 }

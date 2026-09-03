@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getAuthContext } from "@/lib/auth/session";
 import { Sidebar } from "@/components/app-shell/sidebar";
 import { Topbar } from "@/components/app-shell/topbar";
+import { MobileBottomNav } from "@/components/app-shell/mobile-nav";
 import { remainingTrialDays } from "@/lib/entitlements";
 import { ButtonLink } from "@/components/shared/button-link";
 
@@ -35,6 +36,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         ) : null}
         <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 pb-24 lg:px-8 lg:pb-8">{children}</main>
       </div>
+      <MobileBottomNav />
     </div>
   );
 }

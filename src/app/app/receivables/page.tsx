@@ -1,9 +1,11 @@
 import { query } from "@/lib/db/client";
 import { requirePermission } from "@/lib/auth/session";
-import { PageHeader, StatusBadge } from "@/components/shared/chrome";
+import { KpiCard, PageHeader, StatusBadge } from "@/components/shared/chrome";
+import { DataTable } from "@/components/shared/data-table";
 import { formatMoney } from "@/lib/money";
 import { ageingBucket, daysOverdue } from "@/lib/dates";
 import { addMoney } from "@/lib/money";
+import { AlertTriangle, CircleDollarSign, FileText } from "lucide-react";
 
 export default async function ReceivablesPage() {
   const ctx = await requirePermission("receivables.read");
@@ -39,40 +41,54 @@ export default async function ReceivablesPage() {
   return (
     <div>
       <PageHeader title="Receivables" description="Cash still to collect. The operating metric that matters." />
-      <div className="mb-4 grid gap-3 sm:grid-cols-3">
-        <div className="rounded-xl border p-4"><div className="text-xs text-muted-foreground">Total outstanding</div><div className="text-xl font-semibold">{formatMoney(total, ctx.membership.currency)}</div></div>
-        <div className="rounded-xl border p-4"><div className="text-xs text-muted-foreground">Overdue</div><div className="text-xl font-semibold">{formatMoney(overdue, ctx.membership.currency)}</div></div>
-        <div className="rounded-xl border p-4"><div className="text-xs text-muted-foreground">Invoices</div><div className="text-xl font-semibold">{rows.length}</div></div>
+      <div className="mb-6 grid gap-3 sm:grid-cols-3">
+        <KpiCard label="Total outstanding" value={formatMoney(total, ctx.membership.currency)} icon={CircleDollarSign} />
+        <KpiCard
+          label="Overdue"
+          value={formatMoney(overdue, ctx.membership.currency)}
+          icon={AlertTriangle}
+          tone={Number(overdue) > 0 ? "danger" : "success"}
+        />
+        <KpiCard label="Open invoices" value={String(rows.length)} icon={FileText} />
       </div>
-      <div className="overflow-x-auto rounded-xl border bg-background">
-        <table className="min-w-full text-sm">
-          <thead className="bg-muted/50 text-left text-muted-foreground">
-            <tr>
-              {["Invoice","Customer","PO","Invoice date","Due","Amount","Outstanding","Days","Age","Status","Next action"].map((h) => <th key={h} className="px-3 py-2">{h}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => {
+      <DataTable
+        rows={rows}
+        getHref={(row) => `/app/invoices/${row.id}`}
+        emptyTitle="Nothing outstanding"
+        emptyDescription="When invoices have a balance, they will appear here for collection."
+        columns={[
+          { key: "number", header: "Invoice", cell: (row) => <span className="font-medium">{row.number}</span> },
+          { key: "customer", header: "Customer", cell: (row) => row.customer || "—" },
+          { key: "po", header: "PO", hideOnMobile: true, cell: (row) => row.po || "—" },
+          { key: "issue", header: "Issued", hideOnMobile: true, cell: (row) => row.issue_date },
+          { key: "due", header: "Due", cell: (row) => row.due_date },
+          {
+            key: "amount",
+            header: "Amount",
+            align: "right",
+            hideOnMobile: true,
+            cell: (row) => <span className="tabular-nums">{formatMoney(row.total, ctx.membership.currency)}</span>,
+          },
+          {
+            key: "outstanding",
+            header: "Outstanding",
+            align: "right",
+            cell: (row) => <span className="tabular-nums">{formatMoney(row.outstanding, ctx.membership.currency)}</span>,
+          },
+          {
+            key: "days",
+            header: "Days",
+            align: "right",
+            cell: (row) => {
               const days = daysOverdue(row.due_date, now) || 0;
-              return (
-                <tr key={row.id} className="border-t">
-                  <td className="px-3 py-2"><a className="font-medium hover:underline" href={`/app/invoices/${row.id}`}>{row.number}</a></td>
-                  <td className="px-3 py-2">{row.customer}</td>
-                  <td className="px-3 py-2">{row.po}</td>
-                  <td className="px-3 py-2">{row.issue_date}</td>
-                  <td className="px-3 py-2">{row.due_date}</td>
-                  <td className="px-3 py-2 tabular-nums">{formatMoney(row.total, ctx.membership.currency)}</td>
-                  <td className="px-3 py-2 tabular-nums">{formatMoney(row.outstanding, ctx.membership.currency)}</td>
-                  <td className="px-3 py-2">{days}</td>
-                  <td className="px-3 py-2">{ageingBucket(days)}</td>
-                  <td className="px-3 py-2"><StatusBadge value={row.status} /></td>
-                  <td className="px-3 py-2">{row.next_action}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+              return <span className={days > 0 ? "font-medium text-red-700 dark:text-red-300" : ""}>{days}</span>;
+            },
+          },
+          { key: "age", header: "Age", cell: (row) => ageingBucket(daysOverdue(row.due_date, now) || 0) },
+          { key: "status", header: "Status", cell: (row) => <StatusBadge value={row.status} /> },
+          { key: "next", header: "Next action", hideOnMobile: true, cell: (row) => row.next_action || "—" },
+        ]}
+      />
     </div>
   );
 }

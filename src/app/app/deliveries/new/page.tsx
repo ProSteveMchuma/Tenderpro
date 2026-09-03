@@ -13,20 +13,20 @@ export default async function NewDeliveryPage() {
   return (
     <div className="max-w-xl">
       <PageHeader title="Record delivery" />
-      <form action={createDeliveryAction} className="rounded-xl border bg-background p-6">
+      <form action={createDeliveryAction} className="rounded-xl border border-border/80 bg-card p-6 shadow-xs">
         <Field label="Delivery number" name="number" />
         <Field label="Customer">
-          <select name="customerId" className="h-9 w-full rounded-lg border px-3 text-sm">{customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+          <select name="customerId" className="h-10 w-full rounded-lg border bg-background px-3 text-sm">{customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
         </Field>
         <Field label="Purchase order">
-          <select name="purchaseOrderId" className="h-9 w-full rounded-lg border px-3 text-sm">{pos.map((p) => <option key={p.id} value={p.id}>{p.number}</option>)}</select>
+          <select name="purchaseOrderId" className="h-10 w-full rounded-lg border bg-background px-3 text-sm">{pos.map((p) => <option key={p.id} value={p.id}>{p.number}</option>)}</select>
         </Field>
         <Field label="Delivery date" name="deliveryDate" type="date" />
         <Field label="Location" name="location" />
         <Field label="Delivered by" name="deliveredBy" />
         <Field label="Received by" name="receivedBy" />
         <Field label="Status">
-          <select name="status" className="h-9 w-full rounded-lg border px-3 text-sm">{DELIVERY_STATUSES.map((s) => <option key={s}>{s}</option>)}</select>
+          <select name="status" className="h-10 w-full rounded-lg border bg-background px-3 text-sm">{DELIVERY_STATUSES.map((s) => <option key={s}>{s}</option>)}</select>
         </Field>
         <Field label="Notes" name="notes" />
         <Button type="submit">Save</Button>

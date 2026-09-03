@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { query, queryOne } from "@/lib/db/client";
-import { PageHeader, StatusBadge } from "@/components/shared/chrome";
+import { AlertBanner, PageHeader, Panel, StatusBadge } from "@/components/shared/chrome";
+import { ButtonLink } from "@/components/shared/button-link";
 import { formatMoney } from "@/lib/money";
 import { canInvoicePurchaseOrder, poLifecycleStage } from "@/lib/domain/invoice";
+import { cn } from "@/lib/utils";
 
 const STAGES = ["PO RECEIVED", "SOURCING", "DELIVERY", "GRN", "INVOICE", "PAYMENT"];
 
@@ -30,45 +31,65 @@ export default async function PurchaseOrderDetailPage({ params }: { params: Prom
   );
   return (
     <div>
-      <PageHeader title={String(po.number)} description={String(po.customer_name || "")} />
+      <PageHeader
+        eyebrow="Purchase order"
+        title={String(po.number)}
+        description={String(po.customer_name || "")}
+        action={<StatusBadge value={String(po.status)} />}
+      />
       <div className="mb-6 grid grid-cols-2 gap-2 md:grid-cols-6">
         {STAGES.map((stage, index) => (
           <div
             key={stage}
-            className={`rounded-lg border px-3 py-2 text-xs ${index === current ? "border-primary bg-primary text-primary-foreground" : "bg-background text-muted-foreground"}`}
+            className={cn(
+              "rounded-lg border px-3 py-2 text-[11px] font-semibold tracking-wide",
+              index === current
+                ? "border-primary bg-primary text-primary-foreground"
+                : index < current
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100"
+                  : "bg-card text-muted-foreground",
+            )}
           >
             {stage}
           </div>
         ))}
       </div>
       {!gate.allowed ? (
-        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-950">
-          <div className="font-semibold">⚠ Invoice blocked</div>
-          <p className="text-sm">{gate.warning}</p>
+        <div className="mb-6">
+          <AlertBanner tone="warning" title="Invoice blocked">
+            {gate.warning}
+          </AlertBanner>
         </div>
       ) : (
-        <Link href={`/app/invoices/new?poId=${id}`} className="mb-6 inline-flex rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground">
-          Create invoice
-        </Link>
-      )}
-      <div className="rounded-xl border bg-background p-4">
-        <div className="flex items-center justify-between">
-          <StatusBadge value={String(po.status)} />
-          <div className="font-semibold">{formatMoney(String(po.total), String(po.currency))}</div>
+        <div className="mb-6">
+          <ButtonLink href={`/app/invoices/new?poId=${id}`}>Create invoice</ButtonLink>
         </div>
-        <p className="mt-3 text-sm text-muted-foreground">{String(po.payment_terms_text || "")}</p>
+      )}
+      <Panel className="p-5">
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-muted-foreground">Order total</div>
+          <div className="text-xl font-semibold tabular-nums">{formatMoney(String(po.total), String(po.currency))}</div>
+        </div>
+        <p className="mt-3 text-sm leading-6 text-muted-foreground">{String(po.payment_terms_text || "")}</p>
         <table className="mt-4 w-full text-sm">
+          <thead>
+            <tr className="border-b text-left text-[11px] uppercase tracking-wider text-muted-foreground">
+              <th className="py-2 font-medium">Item</th>
+              <th className="py-2 font-medium">Qty</th>
+              <th className="py-2 text-right font-medium">Total</th>
+            </tr>
+          </thead>
           <tbody>
             {items.map((item) => (
-              <tr key={item.description} className="border-t">
-                <td className="py-2">{item.description}</td>
-                <td className="py-2">{item.quantity}</td>
-                <td className="py-2 tabular-nums">{formatMoney(item.total, String(po.currency))}</td>
+              <tr key={item.description} className="border-b last:border-0">
+                <td className="py-2.5">{item.description}</td>
+                <td className="py-2.5 tabular-nums">{item.quantity}</td>
+                <td className="py-2.5 text-right tabular-nums">{formatMoney(item.total, String(po.currency))}</td>
               </tr>
             ))}
           </tbody>
         </table>
-      </div>
+      </Panel>
     </div>
   );
 }

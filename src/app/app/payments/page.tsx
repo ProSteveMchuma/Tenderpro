@@ -1,6 +1,7 @@
 import { query } from "@/lib/db/client";
 import { requirePermission } from "@/lib/auth/session";
 import { PageHeader } from "@/components/shared/chrome";
+import { DataTable } from "@/components/shared/data-table";
 import { formatMoney } from "@/lib/money";
 
 export default async function PaymentsPage() {
@@ -14,22 +15,23 @@ export default async function PaymentsPage() {
   return (
     <div>
       <PageHeader title="Payments" description="Recorded collections against invoices." />
-      <div className="overflow-x-auto rounded-xl border bg-background">
-        <table className="min-w-full text-sm">
-          <thead className="bg-muted/50 text-left"><tr><th className="px-3 py-2">Date</th><th className="px-3 py-2">Customer</th><th className="px-3 py-2">Amount</th><th className="px-3 py-2">Method</th><th className="px-3 py-2">Reference</th></tr></thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.id} className="border-t">
-                <td className="px-3 py-2">{row.payment_date}</td>
-                <td className="px-3 py-2">{row.customer}</td>
-                <td className="px-3 py-2 tabular-nums">{formatMoney(row.amount, ctx.membership.currency)}</td>
-                <td className="px-3 py-2 capitalize">{row.method.replaceAll("_"," ")}</td>
-                <td className="px-3 py-2">{row.bank_reference}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        rows={rows}
+        emptyTitle="No payments recorded"
+        emptyDescription="Allocate a payment from an invoice to start the collection trail."
+        columns={[
+          { key: "date", header: "Date", cell: (row) => row.payment_date },
+          { key: "customer", header: "Customer", cell: (row) => row.customer || "—" },
+          {
+            key: "amount",
+            header: "Amount",
+            align: "right",
+            cell: (row) => <span className="tabular-nums">{formatMoney(row.amount, ctx.membership.currency)}</span>,
+          },
+          { key: "method", header: "Method", cell: (row) => <span className="capitalize">{row.method.replaceAll("_", " ")}</span> },
+          { key: "ref", header: "Reference", hideOnMobile: true, cell: (row) => row.bank_reference || "—" },
+        ]}
+      />
     </div>
   );
 }

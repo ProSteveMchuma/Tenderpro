@@ -7,7 +7,7 @@ export default function NewSupplierPage() {
   return (
     <div className="max-w-xl">
       <PageHeader title="Add supplier" />
-      <form action={createSupplierAction} className="rounded-xl border bg-background p-6">
+      <form action={createSupplierAction} className="rounded-xl border border-border/80 bg-card p-6 shadow-xs">
         <Field label="Company name" name="name" required />
         <Field label="Category" name="category" />
         <Field label="Contact" name="contactName" />

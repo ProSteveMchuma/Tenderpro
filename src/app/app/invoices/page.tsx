@@ -1,7 +1,8 @@
-import Link from "next/link";
 import { query } from "@/lib/db/client";
 import { requirePermission } from "@/lib/auth/session";
 import { PageHeader, StatusBadge } from "@/components/shared/chrome";
+import { ButtonLink } from "@/components/shared/button-link";
+import { DataTable } from "@/components/shared/data-table";
 import { formatMoney } from "@/lib/money";
 import { daysOverdue } from "@/lib/dates";
 
@@ -15,23 +16,43 @@ export default async function InvoicesPage() {
   );
   return (
     <div>
-      <PageHeader title="Invoices" action={<Link className="rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground" href="/app/invoices/new">Create invoice</Link>} />
-      <div className="overflow-x-auto rounded-xl border bg-background">
-        <table className="min-w-full text-sm">
-          <thead className="bg-muted/50 text-left text-muted-foreground"><tr><th className="px-3 py-2">Invoice</th><th className="px-3 py-2">Customer</th><th className="px-3 py-2">Due</th><th className="px-3 py-2">Outstanding</th><th className="px-3 py-2">Status</th></tr></thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.id} className="border-t">
-                <td className="px-3 py-2"><Link className="font-medium hover:underline" href={`/app/invoices/${row.id}`}>{row.number}</Link></td>
-                <td className="px-3 py-2">{row.customer}</td>
-                <td className="px-3 py-2">{row.due_date}{daysOverdue(row.due_date) > 0 ? ` · ${daysOverdue(row.due_date)}d overdue` : ""}</td>
-                <td className="px-3 py-2 tabular-nums">{formatMoney(row.outstanding, ctx.membership.currency)}</td>
-                <td className="px-3 py-2"><StatusBadge value={row.status} /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <PageHeader
+        title="Invoices"
+        description="Issue, track and collect. Overdue invoices are highlighted first in receivables."
+        action={<ButtonLink href="/app/invoices/new">Create invoice</ButtonLink>}
+      />
+      <DataTable
+        rows={rows}
+        getHref={(row) => `/app/invoices/${row.id}`}
+        emptyTitle="No invoices yet"
+        emptyDescription="Create an invoice after a PO is ready — or from a signed GRN."
+        emptyHref="/app/invoices/new"
+        emptyAction="Create invoice"
+        columns={[
+          { key: "number", header: "Invoice", cell: (row) => <span className="font-medium">{row.number}</span> },
+          { key: "customer", header: "Customer", cell: (row) => row.customer || "—" },
+          {
+            key: "due",
+            header: "Due",
+            cell: (row) => {
+              const days = daysOverdue(row.due_date);
+              return (
+                <span>
+                  {row.due_date}
+                  {days > 0 ? <span className="ml-1 text-red-700 dark:text-red-300">· {days}d overdue</span> : null}
+                </span>
+              );
+            },
+          },
+          {
+            key: "outstanding",
+            header: "Outstanding",
+            align: "right",
+            cell: (row) => <span className="tabular-nums">{formatMoney(row.outstanding, ctx.membership.currency)}</span>,
+          },
+          { key: "status", header: "Status", cell: (row) => <StatusBadge value={row.status} /> },
+        ]}
+      />
     </div>
   );
 }

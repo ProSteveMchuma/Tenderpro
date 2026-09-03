@@ -15,10 +15,10 @@ export default async function NewOpportunityPage() {
   return (
     <div className="max-w-xl">
       <PageHeader title="New opportunity" />
-      <form action={createOpportunityAction} className="rounded-xl border bg-background p-6">
+      <form action={createOpportunityAction} className="rounded-xl border border-border/80 bg-card p-6 shadow-xs">
         <Field label="Title" name="title" required />
         <Field label="Customer">
-          <select name="customerId" className="h-9 w-full rounded-lg border px-3 text-sm">
+          <select name="customerId" className="h-10 w-full rounded-lg border bg-background px-3 text-sm">
             <option value="">Unassigned</option>
             {customers.map((item) => (
               <option key={item.id} value={item.id}>
@@ -32,7 +32,7 @@ export default async function NewOpportunityPage() {
         <Field label="Expected closing date" name="expectedCloseDate" type="date" />
         <Field label="Source" name="source" />
         <Field label="Stage">
-          <select name="stage" className="h-9 w-full rounded-lg border px-3 text-sm">
+          <select name="stage" className="h-10 w-full rounded-lg border bg-background px-3 text-sm">
             {OPPORTUNITY_STAGES.map((stage) => (
               <option key={stage}>{stage}</option>
             ))}

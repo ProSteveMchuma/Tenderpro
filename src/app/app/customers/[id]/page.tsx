@@ -2,8 +2,9 @@ import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { query, queryOne } from "@/lib/db/client";
 import { formatMoney } from "@/lib/money";
-import { PageHeader, StatusBadge } from "@/components/shared/chrome";
+import { KpiCard, PageHeader, Panel, PanelHeader, StatusBadge } from "@/components/shared/chrome";
 import { daysOverdue } from "@/lib/dates";
+import { CircleDollarSign, Clock, FileText, Wallet } from "lucide-react";
 
 export default async function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -30,56 +31,52 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
   return (
     <div>
       <PageHeader title={customer.name} description={`${customer.type.replaceAll("_", " ")} · ${customer.industry || "No industry"}`} />
-      <div className="grid gap-3 sm:grid-cols-4">
-        <Kpi label="Total sales" value={formatMoney(invoices.reduce((s, r) => s + Number(r.total), 0).toFixed(2), ctx.membership.currency)} />
-        <Kpi label="Outstanding" value={formatMoney(outstanding.toFixed(2), ctx.membership.currency)} />
-        <Kpi label="Overdue amount" value={formatMoney(overdue.reduce((s, r) => s + Number(r.outstanding), 0).toFixed(2), ctx.membership.currency)} />
-        <Kpi label="Payment terms" value={`${customer.payment_terms_days} days`} />
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <KpiCard label="Total sales" value={formatMoney(invoices.reduce((s, r) => s + Number(r.total), 0).toFixed(2), ctx.membership.currency)} icon={CircleDollarSign} />
+        <KpiCard label="Outstanding" value={formatMoney(outstanding.toFixed(2), ctx.membership.currency)} icon={Wallet} />
+        <KpiCard
+          label="Overdue amount"
+          value={formatMoney(overdue.reduce((s, r) => s + Number(r.outstanding), 0).toFixed(2), ctx.membership.currency)}
+          icon={Clock}
+          tone={overdue.length ? "danger" : "success"}
+        />
+        <KpiCard label="Payment terms" value={`${customer.payment_terms_days} days`} icon={FileText} />
       </div>
       <section className="mt-8 grid gap-6 lg:grid-cols-2">
-        <Block title="Tenders">
-          {tenders.map((row) => (
-            <div key={row.reference || row.title} className="flex justify-between text-sm">
-              <span>{row.reference || row.title}</span>
-              <StatusBadge value={row.status} />
-            </div>
-          ))}
-        </Block>
-        <Block title="Purchase orders">
-          {pos.map((row) => (
-            <div key={row.number} className="flex justify-between text-sm">
-              <span>{row.number}</span>
-              <StatusBadge value={row.status} />
-            </div>
-          ))}
-        </Block>
-        <Block title="Invoices">
-          {invoices.map((row) => (
-            <div key={row.number} className="flex justify-between text-sm">
-              <span>{row.number}</span>
-              <StatusBadge value={row.status} />
-            </div>
-          ))}
-        </Block>
+        <Panel>
+          <PanelHeader title="Tenders" />
+          <div className="space-y-2 p-4">
+            {tenders.map((row) => (
+              <div key={row.reference || row.title} className="flex justify-between text-sm">
+                <span>{row.reference || row.title}</span>
+                <StatusBadge value={row.status} />
+              </div>
+            ))}
+          </div>
+        </Panel>
+        <Panel>
+          <PanelHeader title="Purchase orders" />
+          <div className="space-y-2 p-4">
+            {pos.map((row) => (
+              <div key={row.number} className="flex justify-between text-sm">
+                <span>{row.number}</span>
+                <StatusBadge value={row.status} />
+              </div>
+            ))}
+          </div>
+        </Panel>
+        <Panel>
+          <PanelHeader title="Invoices" />
+          <div className="space-y-2 p-4">
+            {invoices.map((row) => (
+              <div key={row.number} className="flex justify-between text-sm">
+                <span>{row.number}</span>
+                <StatusBadge value={row.status} />
+              </div>
+            ))}
+          </div>
+        </Panel>
       </section>
-    </div>
-  );
-}
-
-function Kpi({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border bg-background p-4">
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="mt-1 text-lg font-semibold">{value}</div>
-    </div>
-  );
-}
-
-function Block({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="rounded-xl border bg-background p-4">
-      <h2 className="mb-3 font-medium">{title}</h2>
-      <div className="space-y-2">{children}</div>
     </div>
   );
 }

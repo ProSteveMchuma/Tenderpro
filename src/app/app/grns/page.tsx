@@ -1,7 +1,8 @@
-import Link from "next/link";
 import { query } from "@/lib/db/client";
 import { requirePermission } from "@/lib/auth/session";
 import { PageHeader, StatusBadge } from "@/components/shared/chrome";
+import { ButtonLink } from "@/components/shared/button-link";
+import { DataTable } from "@/components/shared/data-table";
 
 export default async function GrnPage() {
   const ctx = await requirePermission("grns.read");
@@ -13,22 +14,24 @@ export default async function GrnPage() {
   );
   return (
     <div>
-      <PageHeader title="GRNs" action={<Link className="rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground" href="/app/grns/new">Record GRN</Link>} />
-      <div className="overflow-x-auto rounded-xl border bg-background">
-        <table className="min-w-full text-sm">
-          <thead className="bg-muted/50 text-left"><tr><th className="px-3 py-2">GRN</th><th className="px-3 py-2">PO</th><th className="px-3 py-2">Date</th><th className="px-3 py-2">Status</th></tr></thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.id} className="border-t">
-                <td className="px-3 py-2">{row.number}</td>
-                <td className="px-3 py-2">{row.po}</td>
-                <td className="px-3 py-2">{row.grn_date}</td>
-                <td className="px-3 py-2"><StatusBadge value={row.status} /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <PageHeader
+        title="GRNs"
+        description="A signed goods receipt is the gate that unblocks invoicing."
+        action={<ButtonLink href="/app/grns/new">Record GRN</ButtonLink>}
+      />
+      <DataTable
+        rows={rows}
+        emptyTitle="No GRNs yet"
+        emptyDescription="Record a signed GRN so the related PO can be invoiced."
+        emptyHref="/app/grns/new"
+        emptyAction="Record GRN"
+        columns={[
+          { key: "number", header: "GRN", cell: (row) => <span className="font-medium">{row.number}</span> },
+          { key: "po", header: "PO", cell: (row) => row.po || "—" },
+          { key: "date", header: "Date", cell: (row) => row.grn_date || "—" },
+          { key: "status", header: "Status", cell: (row) => <StatusBadge value={row.status} /> },
+        ]}
+      />
     </div>
   );
 }

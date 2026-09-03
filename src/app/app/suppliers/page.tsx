@@ -1,7 +1,8 @@
-import Link from "next/link";
 import { query } from "@/lib/db/client";
 import { requirePermission } from "@/lib/auth/session";
 import { PageHeader } from "@/components/shared/chrome";
+import { ButtonLink } from "@/components/shared/button-link";
+import { DataTable } from "@/components/shared/data-table";
 
 export default async function SuppliersPage() {
   const ctx = await requirePermission("suppliers.read");
@@ -11,17 +12,24 @@ export default async function SuppliersPage() {
   );
   return (
     <div>
-      <PageHeader title="Suppliers" action={<Link className="rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground" href="/app/suppliers/new">Add supplier</Link>} />
-      <div className="overflow-x-auto rounded-xl border bg-background">
-        <table className="min-w-full text-sm">
-          <thead className="bg-muted/50 text-left"><tr><th className="px-3 py-2">Supplier</th><th className="px-3 py-2">Category</th><th className="px-3 py-2">Location</th><th className="px-3 py-2">Rating</th></tr></thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.id} className="border-t"><td className="px-3 py-2 font-medium">{row.name}</td><td className="px-3 py-2">{row.category}</td><td className="px-3 py-2">{row.location}</td><td className="px-3 py-2">{row.rating}</td></tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <PageHeader
+        title="Suppliers"
+        description="Upstream vendors you buy from when fulfilling a purchase order."
+        action={<ButtonLink href="/app/suppliers/new">Add supplier</ButtonLink>}
+      />
+      <DataTable
+        rows={rows}
+        emptyTitle="No suppliers yet"
+        emptyDescription="Add the vendors you source from for RFQs and quotations."
+        emptyHref="/app/suppliers/new"
+        emptyAction="Add supplier"
+        columns={[
+          { key: "name", header: "Supplier", cell: (row) => <span className="font-medium">{row.name}</span> },
+          { key: "category", header: "Category", cell: (row) => row.category || "—" },
+          { key: "location", header: "Location", cell: (row) => row.location || "—" },
+          { key: "rating", header: "Rating", align: "right", cell: (row) => row.rating || "—" },
+        ]}
+      />
     </div>
   );
 }

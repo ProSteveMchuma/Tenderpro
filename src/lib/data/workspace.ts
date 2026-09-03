@@ -159,7 +159,7 @@ export async function getDashboardData(ctx: AuthContext) {
 }
 
 async function buildAttention(orgId: string, now: Date) {
-  const items: { title: string; href: string; tone: "danger" | "warning" | "info" }[] = [];
+  const items: { title: string; href: string; tone: "danger" | "warning" | "info"; actionLabel: string }[] = [];
   const overdueInvoices = await query<{ id: string; number: string; due_date: string; outstanding: string }>(
     `select id, number, due_date::text, outstanding::text from invoices
      where organization_id = $1 and deleted_at is null and outstanding::numeric > 0`,
@@ -172,6 +172,7 @@ async function buildAttention(orgId: string, now: Date) {
         title: `Invoice ${invoice.number} is ${days} days overdue.`,
         href: `/app/invoices/${invoice.id}`,
         tone: "danger",
+        actionLabel: "Collect",
       });
     }
   }
@@ -187,9 +188,10 @@ async function buildAttention(orgId: string, now: Date) {
   );
   for (const po of missingGrn) {
     items.push({
-      title: `GRN missing for ${po.number}.`,
-      href: `/app/purchase-orders/${po.id}`,
-      tone: "warning",
+        title: `GRN missing for ${po.number}.`,
+        href: `/app/purchase-orders/${po.id}`,
+        tone: "warning",
+        actionLabel: "Record GRN",
     });
   }
   const docs = await query<{ name: string; expiry_date: string }>(
@@ -204,6 +206,7 @@ async function buildAttention(orgId: string, now: Date) {
         title: `${doc.name} expires in ${remaining} days.`,
         href: "/app/vault",
         tone: remaining <= 7 ? "danger" : "warning",
+        actionLabel: "Renew",
       });
     }
   }
@@ -220,6 +223,7 @@ async function buildAttention(orgId: string, now: Date) {
         title: `${tender.reference ?? tender.title} closes in ${Math.round(hours)} hours.`,
         href: `/app/tenders/${tender.id}`,
         tone: "danger",
+        actionLabel: "Open tender",
       });
     }
   }
@@ -236,6 +240,7 @@ async function buildAttention(orgId: string, now: Date) {
       title: `${row.cnt} mandatory document${row.cnt === 1 ? "" : "s"} missing from Tender ${row.reference ?? ""}.`.trim(),
       href: `/app/tenders/${row.tender_id}`,
       tone: "danger",
+      actionLabel: "Fix compliance",
     });
   }
   return items.slice(0, 8);

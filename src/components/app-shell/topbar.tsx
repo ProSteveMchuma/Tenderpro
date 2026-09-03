@@ -4,11 +4,20 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { Command } from "cmdk";
 import Link from "next/link";
-import { Moon, Search, Sun } from "lucide-react";
+import { ChevronDown, LogOut, Moon, Search, Settings, Sparkles, Sun, UserRound } from "lucide-react";
 import { useTheme } from "next-themes";
-import { switchOrganizationAction } from "@/app/actions/auth";
+import { logoutAction, switchOrganizationAction } from "@/app/actions/auth";
 import { globalSearchAction } from "@/app/actions/records";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { MobileMenuButton } from "@/components/app-shell/mobile-nav";
 
 const COMMANDS = [
   { href: "/app/invoices/new", label: "Create invoice" },
@@ -24,10 +33,12 @@ export function Topbar({
   userName,
   memberships,
   currentOrgId,
+  organizationName,
 }: {
   userName: string;
   memberships: { organizationId: string; organizationName: string }[];
   currentOrgId: string;
+  organizationName: string;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -35,6 +46,12 @@ export function Topbar({
   const [pending, start] = useTransition();
   const router = useRouter();
   const { theme, setTheme } = useTheme();
+  const initials = userName
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -73,23 +90,29 @@ export function Topbar({
   );
 
   return (
-    <header className="flex h-14 items-center gap-3 border-b bg-background px-4">
+    <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-card/90 px-3 backdrop-blur-sm lg:px-5">
+      <MobileMenuButton organizationName={organizationName} />
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-lg border bg-muted/40 px-3 text-left text-sm text-muted-foreground md:max-w-xl"
+        className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-lg border bg-muted/40 px-3 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/70 md:max-w-xl"
       >
-        <Search className="size-4" />
+        <Search className="size-4 shrink-0" />
         <span className="truncate">Search tenders, invoices, customers…</span>
-        <kbd className="ml-auto hidden rounded border bg-background px-1.5 text-[10px] md:inline">⌘K</kbd>
+        <kbd className="ml-auto hidden rounded border bg-background px-1.5 py-0.5 text-[10px] font-medium md:inline">
+          ⌘K
+        </kbd>
       </button>
-      <form action={switchOrganizationAction}>
+      <form action={switchOrganizationAction} className="max-w-[140px] sm:max-w-[200px]">
+        <label className="sr-only" htmlFor="organizationId">
+          Switch organization
+        </label>
         <select
+          id="organizationId"
           name="organizationId"
           defaultValue={currentOrgId}
           onChange={(event) => event.currentTarget.form?.requestSubmit()}
-          className="h-9 max-w-[180px] rounded-lg border bg-background px-2 text-sm"
-          aria-label="Switch organization"
+          className="h-9 max-w-[200px] rounded-lg border bg-background px-2 text-sm"
         >
           {memberships.map((item) => (
             <option key={item.organizationId} value={item.organizationId}>
@@ -102,10 +125,53 @@ export function Topbar({
         <Sun className="size-4 dark:hidden" />
         <Moon className="hidden size-4 dark:block" />
       </Button>
-      <div className="hidden text-sm md:block">{userName}</div>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button variant="ghost" className="h-9 gap-2 px-1.5 sm:px-2" />
+          }
+        >
+          <Avatar size="sm">
+            <AvatarFallback>{initials || "U"}</AvatarFallback>
+          </Avatar>
+          <span className="hidden max-w-[140px] truncate text-sm md:inline">{userName}</span>
+          <ChevronDown className="hidden size-3.5 text-muted-foreground md:inline" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-52">
+          <div className="px-1.5 py-1.5 text-xs font-medium text-muted-foreground">{userName}</div>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => router.push("/app/settings")}>
+            <Settings />
+            Settings
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => router.push("/app/copilot")}>
+            <Sparkles />
+            Copilot
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => router.push("/app/team")}>
+            <UserRound />
+            Team
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            variant="destructive"
+            onClick={() => {
+              const form = document.getElementById("sos-logout") as HTMLFormElement | null;
+              form?.requestSubmit();
+            }}
+          >
+            <LogOut />
+            Sign out
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <form id="sos-logout" action={logoutAction} className="hidden" />
       {open ? (
-        <div className="fixed inset-0 z-50 bg-black/40 p-4" onClick={() => setOpen(false)}>
-          <div className="mx-auto mt-[12vh] max-w-xl overflow-hidden rounded-xl border bg-background shadow-xl" onClick={(event) => event.stopPropagation()}>
+        <div className="fixed inset-0 z-50 bg-foreground/30 p-4 backdrop-blur-[2px]" onClick={() => setOpen(false)}>
+          <div
+            className="mx-auto mt-[12vh] max-w-xl overflow-hidden rounded-xl border bg-popover shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
             <Command className="block">
               <Command.Input
                 autoFocus
@@ -115,7 +181,9 @@ export function Topbar({
                 className="h-12 w-full border-b bg-transparent px-4 text-sm outline-none"
               />
               <Command.List className="max-h-80 overflow-y-auto p-2">
-                <Command.Empty className="px-2 py-6 text-sm text-muted-foreground">{pending ? "Searching…" : "No results"}</Command.Empty>
+                <Command.Empty className="px-2 py-6 text-sm text-muted-foreground">
+                  {pending ? "Searching…" : "No results"}
+                </Command.Empty>
                 <Command.Group heading="Actions" className="px-1 py-2 text-xs text-muted-foreground">
                   {COMMANDS.map((item) => (
                     <Command.Item
@@ -150,7 +218,7 @@ export function Topbar({
               </Command.List>
             </Command>
             <div className="border-t px-3 py-2 text-xs text-muted-foreground">
-              <Link href="/app/copilot" onClick={() => setOpen(false)}>
+              <Link href="/app/copilot" onClick={() => setOpen(false)} className="hover:text-foreground">
                 Ask Copilot
               </Link>
             </div>

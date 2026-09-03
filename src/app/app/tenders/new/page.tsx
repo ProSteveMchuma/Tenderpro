@@ -14,12 +14,12 @@ export default async function NewTenderPage() {
   return (
     <div className="max-w-2xl">
       <PageHeader title="New tender" description="Create manually or upload a tender document for AI analysis." />
-      <form action={createTenderAction} className="rounded-xl border bg-background p-6">
+      <form action={createTenderAction} className="rounded-xl border border-border/80 bg-card p-6 shadow-xs">
         <Field label="Tender title" name="title" required />
         <Field label="Reference" name="reference" />
         <Field label="Procuring entity" name="procuringEntity" />
         <Field label="Customer">
-          <select name="customerId" className="h-9 w-full rounded-lg border px-3 text-sm">
+          <select name="customerId" className="h-10 w-full rounded-lg border bg-background px-3 text-sm">
             <option value="">Select customer</option>
             {customers.map((item) => (
               <option key={item.id} value={item.id}>

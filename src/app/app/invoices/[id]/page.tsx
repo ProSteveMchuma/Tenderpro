@@ -13,7 +13,10 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
   const { id } = await params;
   const ctx = await requirePermission("invoices.read");
   const invoice = await queryOne<Record<string, string>>(
-    `select i.*, c.name as customer_name, po.number as po_number
+    `select i.id, i.number, i.status, i.currency, i.customer_id,
+            i.issue_date::text, i.due_date::text, i.etims_reference,
+            i.total::text, i.paid_amount::text, i.outstanding::text,
+            c.name as customer_name, po.number as po_number
      from invoices i
      left join customers c on c.id=i.customer_id
      left join purchase_orders po on po.id=i.purchase_order_id

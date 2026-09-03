@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getAuthContext } from "@/lib/auth/session";
+import { clearSession, getAuthContext } from "@/lib/auth/session";
 import { Sidebar } from "@/components/app-shell/sidebar";
 import { Topbar } from "@/components/app-shell/topbar";
 import { remainingTrialDays } from "@/lib/entitlements";
@@ -7,7 +7,10 @@ import Link from "next/link";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const ctx = await getAuthContext();
-  if (!ctx) redirect("/login");
+  if (!ctx) {
+    await clearSession();
+    redirect("/login");
+  }
   if (!ctx.membership.onboardingCompletedAt) redirect("/onboarding");
   const trialDays = remainingTrialDays(ctx.membership.trialEndsAt);
   return (

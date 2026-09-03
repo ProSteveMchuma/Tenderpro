@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { COUNTRIES } from "@/lib/constants";
 
 export default function SignupPage() {
-  const [state, action] = useActionState(async (_prev: { error?: string } | null, formData: FormData) => signUpAction(formData), null);
+  const [state, action] = useActionState(signUpAction, null);
   return (
     <AuthCard title="Start your 14-day trial" subtitle="We’ll create your organization automatically.">
       <form action={action}>
@@ -27,7 +27,7 @@ export default function SignupPage() {
         </Field>
         <Field label="Password" name="password" type="password" required />
         {state?.error ? <p className="mb-2 text-sm text-destructive">{state.error}</p> : null}
-        <Button type="submit" className="w-full">
+        <Button type="submit" nativeButton className="w-full">
           Create account
         </Button>
       </form>

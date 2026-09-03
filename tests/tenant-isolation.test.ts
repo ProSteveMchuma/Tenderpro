@@ -4,7 +4,7 @@ import { describe, expect, it, beforeAll } from "vitest";
 import { bootstrapDatabase, resetDatabaseBootstrap } from "@/lib/db/bootstrap";
 import { resetDocumentStoreCache } from "@/lib/db/firestore/client";
 import { resetLocalDocumentStore } from "@/lib/db/firestore/local-store";
-import { listByOrg, docs } from "@/lib/db/repo";
+import { listByOrg, docs, findProfileByEmail } from "@/lib/db/repo";
 import { DEMO } from "@/lib/db/demo";
 
 describe("tenant isolation", () => {
@@ -35,6 +35,11 @@ describe("tenant isolation", () => {
       where: [{ field: "number", op: "==", value: "INV-2026-0084" }],
     });
     expect(acme).toHaveLength(1);
+
+    const profile = await findProfileByEmail("steve@acmesupplies.ke");
+    expect(profile?.email).toBe("steve@acmesupplies.ke");
+    const bcrypt = await import("bcryptjs");
+    await expect(bcrypt.compare(DEMO.password, String(profile?.passwordHash))).resolves.toBe(true);
 
     const riftMembers = await docs("organization_members", {
       where: [

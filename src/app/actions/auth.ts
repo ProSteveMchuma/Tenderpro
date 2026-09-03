@@ -28,7 +28,7 @@ const signupSchema = z.object({
   phone: z.string().min(6),
 });
 
-export async function signUpAction(formData: FormData) {
+export async function signUpAction(_prev: { error?: string } | null, formData: FormData) {
   await bootstrapDatabase();
   const parsed = signupSchema.safeParse({
     fullName: formData.get("fullName"),
@@ -109,7 +109,7 @@ export async function signUpAction(formData: FormData) {
   redirect("/onboarding");
 }
 
-export async function loginAction(formData: FormData) {
+export async function loginAction(_prev: { error?: string } | null, formData: FormData) {
   await bootstrapDatabase();
   const email = String(formData.get("email") || "");
   const password = String(formData.get("password") || "");
@@ -136,7 +136,7 @@ export async function switchOrganizationAction(formData: FormData) {
   redirect("/app");
 }
 
-export async function forgotPasswordAction(formData: FormData) {
+export async function forgotPasswordAction(_prev: { ok?: boolean } | null, formData: FormData) {
   await bootstrapDatabase();
   const email = String(formData.get("email") || "");
   const user = await findProfileByEmail(email);
@@ -160,7 +160,7 @@ export async function forgotPasswordAction(formData: FormData) {
   return { ok: true };
 }
 
-export async function resetPasswordAction(formData: FormData) {
+export async function resetPasswordAction(_prev: { error?: string; ok?: boolean } | null, formData: FormData) {
   await bootstrapDatabase();
   const token = String(formData.get("token") || "");
   const password = String(formData.get("password") || "");

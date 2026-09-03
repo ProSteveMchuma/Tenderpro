@@ -14,7 +14,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -139,7 +138,7 @@ export function Topbar({
           <ChevronDown className="hidden size-3.5 text-muted-foreground md:inline" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-52">
-          <DropdownMenuLabel>{userName}</DropdownMenuLabel>
+          <div className="px-1.5 py-1.5 text-xs font-medium text-muted-foreground">{userName}</div>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => router.push("/app/settings")}>
             <Settings />

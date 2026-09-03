@@ -77,7 +77,7 @@ Required in production:
 | Mode | When it is used | Where data lives |
 | --- | --- | --- |
 | Local document store | No service account / emulator | `.data/firestore/db.json` |
-| Cloud Firestore | `FIREBASE_SERVICE_ACCOUNT_JSON` or `FIRESTORE_EMULATOR_HOST` | Your Firebase project |
+| Cloud Firestore | `FIREBASE_SERVICE_ACCOUNT_PATH` / `FIREBASE_SERVICE_ACCOUNT_JSON` | Project `tenderpro-480721` |
 
 Collections are flat (one collection per entity: `profiles`, `organizations`, `invoices`, `tenders`, …). Fields are camelCase. Money is stored as strings. Soft deletes use `deletedAt`.
 
@@ -85,10 +85,10 @@ Access the database through `src/lib/db/repo.ts` (`listByOrg`, `getOrgDoc`, `cre
 
 Connect this Firebase project (`tenderpro-480721`):
 
-The web app config lives in `src/lib/firebase/config.ts` and `.env.example`. That config is public. To have the **server** write into Cloud Firestore:
+This project’s native Firestore database is named **`tenderpro`** (`FIRESTORE_DATABASE=tenderpro`). There is no `(default)` database.
 
 1. Firebase Console → Project settings → Service accounts → Generate new private key.
-2. Paste the JSON into `FIREBASE_SERVICE_ACCOUNT_JSON` (Vercel / `.env`, never the browser).
+2. Save the file locally (gitignored) and set `FIREBASE_SERVICE_ACCOUNT_PATH`, or paste the JSON into `FIREBASE_SERVICE_ACCOUNT_JSON` (Vercel env, never the browser).
 3. Set `FIREBASE_USE_CLOUD=true`.
 4. Deploy rules and indexes:
 

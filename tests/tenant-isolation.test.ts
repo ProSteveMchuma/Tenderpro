@@ -14,6 +14,8 @@ describe("tenant isolation", () => {
     process.env.DEMO_SEED_ON_BOOT = "true";
     process.env.FIREBASE_USE_CLOUD = "false";
     delete process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+    delete process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
     delete process.env.FIRESTORE_EMULATOR_HOST;
     process.env.FIRESTORE_LOCAL_PATH = path.join(
       os.tmpdir(),

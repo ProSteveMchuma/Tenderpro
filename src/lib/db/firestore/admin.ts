@@ -1,4 +1,5 @@
 import "server-only";
+import fs from "node:fs/promises";
 import {
   DbDoc,
   DocumentStore,
@@ -6,7 +7,7 @@ import {
   matchesWhere,
   sortDocs,
 } from "@/lib/db/types";
-import { getFirebaseProjectId } from "@/lib/firebase/config";
+import { getFirebaseProjectId, getFirestoreDatabaseId } from "@/lib/firebase/config";
 
 type GlobalFirebase = {
   app?: import("firebase-admin/app").App;
@@ -15,17 +16,28 @@ type GlobalFirebase = {
 
 const globalForFb = globalThis as typeof globalThis & { __supplierosFirebase?: GlobalFirebase };
 
-function readServiceAccount() {
+function readServiceAccountJson() {
   const json = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  if (!json) return null;
+  if (json) return json;
+  return null;
+}
+
+function serviceAccountPath() {
+  return process.env.FIREBASE_SERVICE_ACCOUNT_PATH || process.env.GOOGLE_APPLICATION_CREDENTIALS || "";
+}
+
+async function readServiceAccount() {
+  const json = readServiceAccountJson();
+  const raw = json ?? (serviceAccountPath() ? await fs.readFile(serviceAccountPath(), "utf8") : null);
+  if (!raw) return null;
   try {
-    return JSON.parse(json) as {
+    return JSON.parse(raw) as {
       project_id?: string;
       client_email?: string;
       private_key?: string;
     };
   } catch {
-    throw new Error("FIREBASE_SERVICE_ACCOUNT_JSON is not valid JSON.");
+    throw new Error("Firebase service account JSON is not valid.");
   }
 }
 
@@ -35,14 +47,14 @@ export async function createFirebaseDocumentStore(): Promise<DocumentStore> {
   const { cert, getApps, initializeApp } = await import("firebase-admin/app");
   const { getFirestore } = await import("firebase-admin/firestore");
 
-  const projectId = getFirebaseProjectId() || readServiceAccount()?.project_id;
+  const serviceAccount = await readServiceAccount();
+  const projectId = getFirebaseProjectId() || serviceAccount?.project_id;
   if (!projectId) {
     throw new Error("FIREBASE_PROJECT_ID or FIREBASE_SERVICE_ACCOUNT_JSON is required for cloud Firestore.");
   }
 
   let app = getApps()[0];
   if (!app) {
-    const serviceAccount = readServiceAccount();
     if (serviceAccount?.client_email && serviceAccount.private_key) {
       app = initializeApp({
         credential: cert({
@@ -55,13 +67,16 @@ export async function createFirebaseDocumentStore(): Promise<DocumentStore> {
     } else if (process.env.FIRESTORE_EMULATOR_HOST || process.env.FIREBASE_AUTH_EMULATOR_HOST) {
       app = initializeApp({ projectId });
     } else {
-      // Application Default Credentials (GCP / Firebase Functions)
       app = initializeApp({ projectId });
     }
   }
 
-  const db = getFirestore(app);
-  db.settings({ ignoreUndefinedProperties: true });
+  const db = getFirestore(app, getFirestoreDatabaseId());
+  try {
+    db.settings({ ignoreUndefinedProperties: true });
+  } catch {
+    // settings() can only run once per Firestore instance
+  }
 
   const store: DocumentStore = {
     async get(collection: string, id: string) {

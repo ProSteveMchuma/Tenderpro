@@ -20,3 +20,8 @@ export function getFirebaseProjectId() {
     firebaseWebConfig.projectId
   );
 }
+
+/** Named Firestore database. This project has `tenderpro`, not `(default)`. */
+export function getFirestoreDatabaseId() {
+  return process.env.FIRESTORE_DATABASE || "tenderpro";
+}

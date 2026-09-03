@@ -54,6 +54,10 @@ build
 .local-uploads/
 *.db
 
+# Firebase Admin private keys — never commit
+*firebase-adminsdk*.json
+.secrets/
+
 # Vercel
 .vercel
 

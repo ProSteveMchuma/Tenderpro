@@ -3,7 +3,7 @@ import path from "node:path";
 import { getDatabaseDriver, getSql } from "@/lib/db/client";
 import { seedDemoData } from "@/lib/db/seed";
 import { getDocumentStore, getFirestoreBackend } from "@/lib/db/firestore/client";
-import { getFirebaseProjectId } from "@/lib/firebase/config";
+import { getFirebaseProjectId, getFirestoreDatabaseId } from "@/lib/firebase/config";
 
 let bootPromise: Promise<void> | null = null;
 
@@ -22,7 +22,7 @@ async function runBootstrap() {
     await getDocumentStore();
     const backend = await getFirestoreBackend();
     console.info(
-      `[supplieros] database driver=firestore backend=${backend} project=${getFirebaseProjectId()}`,
+      `[supplieros] database driver=firestore backend=${backend} project=${getFirebaseProjectId()} database=${getFirestoreDatabaseId()}`,
     );
   } else {
     const sql = await getSql();

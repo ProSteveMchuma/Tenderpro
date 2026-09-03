@@ -14,9 +14,9 @@ const globalForStore = globalThis as typeof globalThis & { __supplierosDocStore?
 
 export function firestoreMode(): "local" | "cloud" {
   if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) return "cloud";
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_PATH) return "cloud";
   if (process.env.FIRESTORE_EMULATOR_HOST) return "cloud";
   if (getFirebaseProjectId() && process.env.GOOGLE_APPLICATION_CREDENTIALS) return "cloud";
-  // Explicit cloud request without credentials still falls back to local demo store.
   if (process.env.FIREBASE_USE_CLOUD === "true" && getFirebaseProjectId()) return "cloud";
   return "local";
 }
@@ -35,6 +35,10 @@ export async function getDocumentStore(): Promise<DocumentStore> {
         try {
           return await createFirebaseDocumentStore();
         } catch (error) {
+          const hasCredentials = Boolean(
+            process.env.FIREBASE_SERVICE_ACCOUNT_JSON || process.env.FIREBASE_SERVICE_ACCOUNT_PATH,
+          );
+          if (hasCredentials) throw error;
           console.warn("Cloud Firestore unavailable, using local Firestore document store:", error);
           return createLocalDocumentStore();
         }

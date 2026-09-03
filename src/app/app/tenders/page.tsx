@@ -1,7 +1,8 @@
-import Link from "next/link";
 import { query } from "@/lib/db/client";
 import { requirePermission } from "@/lib/auth/session";
-import { PageHeader, StatusBadge } from "@/components/shared/chrome";
+import { Meter, PageHeader, StatusBadge } from "@/components/shared/chrome";
+import { ButtonLink } from "@/components/shared/button-link";
+import { DataTable } from "@/components/shared/data-table";
 import { formatMoney } from "@/lib/money";
 import { formatDateTime } from "@/lib/dates";
 
@@ -25,46 +26,39 @@ export default async function TendersPage() {
     <div>
       <PageHeader
         title="Tenders"
-        description="Capture requirements, readiness and submission risk."
-        action={
-          <Link href="/app/tenders/new" className="rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground">
-            New tender
-          </Link>
-        }
+        description="Capture requirements, readiness and submission risk before the close date."
+        action={<ButtonLink href="/app/tenders/new">New tender</ButtonLink>}
       />
-      <div className="overflow-x-auto rounded-xl border bg-background">
-        <table className="min-w-full text-sm">
-          <thead className="bg-muted/50 text-left text-muted-foreground">
-            <tr>
-              <th className="px-3 py-2">Tender</th>
-              <th className="px-3 py-2">Entity</th>
-              <th className="px-3 py-2">Closes</th>
-              <th className="px-3 py-2">Value</th>
-              <th className="px-3 py-2">Readiness</th>
-              <th className="px-3 py-2">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.id} className="border-t">
-                <td className="px-3 py-2">
-                  <Link href={`/app/tenders/${row.id}`} className="font-medium hover:underline">
-                    {row.reference || row.title}
-                  </Link>
-                  <div className="text-xs text-muted-foreground">{row.title}</div>
-                </td>
-                <td className="px-3 py-2">{row.procuring_entity}</td>
-                <td className="px-3 py-2">{formatDateTime(row.closing_at, ctx.membership.timezone)}</td>
-                <td className="px-3 py-2 tabular-nums">{row.tender_value ? formatMoney(row.tender_value, ctx.membership.currency) : "—"}</td>
-                <td className="px-3 py-2">{row.readiness_percent}%</td>
-                <td className="px-3 py-2">
-                  <StatusBadge value={row.status} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        rows={rows}
+        getHref={(row) => `/app/tenders/${row.id}`}
+        emptyTitle="No tenders yet"
+        emptyDescription="Upload a tender document and we’ll extract requirements for review."
+        emptyHref="/app/tenders/new"
+        emptyAction="New tender"
+        columns={[
+          {
+            key: "tender",
+            header: "Tender",
+            cell: (row) => (
+              <div>
+                <div className="font-medium">{row.reference || row.title}</div>
+                <div className="text-xs text-muted-foreground">{row.title}</div>
+              </div>
+            ),
+          },
+          { key: "entity", header: "Entity", cell: (row) => row.procuring_entity || "—" },
+          { key: "closes", header: "Closes", cell: (row) => formatDateTime(row.closing_at, ctx.membership.timezone) },
+          {
+            key: "value",
+            header: "Value",
+            align: "right",
+            cell: (row) => (row.tender_value ? <span className="tabular-nums">{formatMoney(row.tender_value, ctx.membership.currency)}</span> : "—"),
+          },
+          { key: "readiness", header: "Readiness", cell: (row) => <Meter value={row.readiness_percent} /> },
+          { key: "status", header: "Status", cell: (row) => <StatusBadge value={row.status} /> },
+        ]}
+      />
     </div>
   );
 }

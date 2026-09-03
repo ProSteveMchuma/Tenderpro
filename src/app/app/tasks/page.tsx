@@ -1,6 +1,6 @@
 import { query } from "@/lib/db/client";
 import { requirePermission } from "@/lib/auth/session";
-import { PageHeader, StatusBadge } from "@/components/shared/chrome";
+import { PageHeader, Panel, StatusBadge } from "@/components/shared/chrome";
 import { completeTaskAction, createTaskAction } from "@/app/actions/records";
 import { Field } from "@/components/auth/auth-card";
 import { Button } from "@/components/ui/button";
@@ -14,35 +14,45 @@ export default async function TasksPage() {
   return (
     <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
       <div>
-        <PageHeader title="Tasks" />
+        <PageHeader title="Tasks" description="Work the team still needs to finish." />
         <div className="space-y-2">
-          {rows.map((row) => (
-            <form key={row.id} action={completeTaskAction} className="flex items-center justify-between rounded-xl border bg-background px-4 py-3">
-              <div>
-                <div className="font-medium">{row.title}</div>
-                <div className="text-xs text-muted-foreground">{row.due_date} · {row.priority}</div>
-              </div>
-              <div className="flex items-center gap-2">
-                <StatusBadge value={row.status} />
-                {row.status !== "complete" ? (
-                  <>
-                    <input type="hidden" name="id" value={row.id} />
-                    <Button type="submit" size="sm" variant="outline">Complete</Button>
-                  </>
-                ) : null}
-              </div>
-            </form>
-          ))}
+          {rows.length === 0 ? (
+            <Panel className="p-8 text-center text-sm text-muted-foreground">No open tasks.</Panel>
+          ) : (
+            rows.map((row) => (
+              <form key={row.id} action={completeTaskAction} className="flex items-center justify-between gap-3 rounded-xl border bg-card px-4 py-3 shadow-xs">
+                <div>
+                  <div className="font-medium">{row.title}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {row.due_date || "No due date"} · {row.priority}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <StatusBadge value={row.status} />
+                  {row.status !== "complete" ? (
+                    <>
+                      <input type="hidden" name="id" value={row.id} />
+                      <Button type="submit" size="sm" variant="outline">
+                        Complete
+                      </Button>
+                    </>
+                  ) : null}
+                </div>
+              </form>
+            ))
+          )}
         </div>
       </div>
-      <form action={createTaskAction} className="rounded-xl border bg-background p-4">
-        <h2 className="font-medium">New task</h2>
-        <Field label="Title" name="title" required />
-        <Field label="Description" name="description" />
-        <Field label="Due date" name="dueDate" type="date" />
-        <Field label="Priority" name="priority" defaultValue="medium" />
-        <Button type="submit">Create task</Button>
-      </form>
+      <Panel className="p-4">
+        <form action={createTaskAction}>
+          <h2 className="text-sm font-semibold">New task</h2>
+          <Field label="Title" name="title" required />
+          <Field label="Description" name="description" />
+          <Field label="Due date" name="dueDate" type="date" />
+          <Field label="Priority" name="priority" defaultValue="medium" />
+          <Button type="submit">Create task</Button>
+        </form>
+      </Panel>
     </div>
   );
 }

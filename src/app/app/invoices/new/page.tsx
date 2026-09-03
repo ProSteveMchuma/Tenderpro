@@ -1,7 +1,7 @@
 import { createInvoiceAction } from "@/app/actions/records";
 import { requirePermission } from "@/lib/auth/session";
 import { query, queryOne } from "@/lib/db/client";
-import { PageHeader } from "@/components/shared/chrome";
+import { AlertBanner, PageHeader } from "@/components/shared/chrome";
 import { Field } from "@/components/auth/auth-card";
 import { Button } from "@/components/ui/button";
 import { canInvoicePurchaseOrder } from "@/lib/domain/invoice";
@@ -21,7 +21,13 @@ export default async function NewInvoicePage({ searchParams }: { searchParams: P
   return (
     <div className="max-w-xl">
       <PageHeader title="Create invoice" />
-      {!gate.allowed ? <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-950">{gate.warning}</div> : null}
+      {!gate.allowed ? (
+        <div className="mb-4">
+          <AlertBanner tone="danger" title="Invoice blocked">
+            {gate.warning}
+          </AlertBanner>
+        </div>
+      ) : null}
       <form action={createInvoiceAction} className="rounded-xl border bg-background p-6">
         <Field label="Invoice number" name="number" />
         <Field label="Customer"><select name="customerId" className="h-9 w-full rounded-lg border px-3 text-sm">{customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>

@@ -14,10 +14,10 @@ export default async function NewPurchaseOrderPage() {
   return (
     <div className="max-w-xl">
       <PageHeader title="New purchase order" description="Create manually or upload a PO PDF for AI extraction." />
-      <form action={createPurchaseOrderAction} className="rounded-xl border bg-background p-6">
+      <form action={createPurchaseOrderAction} className="rounded-xl border border-border/80 bg-card p-6 shadow-xs">
         <Field label="PO number" name="number" />
         <Field label="Customer">
-          <select name="customerId" className="h-9 w-full rounded-lg border px-3 text-sm">
+          <select name="customerId" className="h-10 w-full rounded-lg border bg-background px-3 text-sm">
             <option value="">Select customer</option>
             {customers.map((item) => (
               <option key={item.id} value={item.id}>

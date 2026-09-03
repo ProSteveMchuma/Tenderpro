@@ -1,9 +1,8 @@
 "use client";
 
 import { useActionState } from "react";
-import Link from "next/link";
 import { signUpAction } from "@/app/actions/auth";
-import { AuthCard, Field } from "@/components/auth/auth-card";
+import { AuthCard, Field, TextLink } from "@/components/auth/auth-card";
 import { Button } from "@/components/ui/button";
 import { COUNTRIES } from "@/lib/constants";
 
@@ -17,7 +16,7 @@ export default function SignupPage() {
         <Field label="Email" name="email" type="email" required />
         <Field label="Phone number" name="phone" required />
         <Field label="Country">
-          <select name="country" defaultValue="KE" className="h-9 w-full rounded-lg border bg-background px-3 text-sm">
+          <select name="country" defaultValue="KE" className="h-10 w-full rounded-lg border bg-background px-3 text-sm">
             {COUNTRIES.map((country) => (
               <option key={country.code} value={country.code}>
                 {country.name}
@@ -27,15 +26,12 @@ export default function SignupPage() {
         </Field>
         <Field label="Password" name="password" type="password" required />
         {state?.error ? <p className="mb-2 text-sm text-destructive">{state.error}</p> : null}
-        <Button type="submit" className="w-full">
+        <Button type="submit" className="h-10 w-full">
           Create account
         </Button>
       </form>
       <p className="mt-4 text-sm">
-        Already registered?{" "}
-        <Link href="/login" className="underline">
-          Sign in
-        </Link>
+        Already registered? <TextLink href="/login">Sign in</TextLink>
       </p>
     </AuthCard>
   );

@@ -1,7 +1,8 @@
-import Link from "next/link";
 import { query } from "@/lib/db/client";
 import { requirePermission } from "@/lib/auth/session";
-import { PageHeader, StatusBadge } from "@/components/shared/chrome";
+import { PageHeader, Panel, StatusBadge } from "@/components/shared/chrome";
+import { ButtonLink } from "@/components/shared/button-link";
+import { DataTable } from "@/components/shared/data-table";
 import { formatMoney } from "@/lib/money";
 import { OPPORTUNITY_STAGES } from "@/lib/constants";
 import { AutoSubmitSelect } from "@/components/shared/auto-submit-select";
@@ -29,62 +30,58 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
         description="Track work before a tender document exists."
         action={
           <div className="flex gap-2">
-            <Link href="/app/opportunities?view=kanban" className="rounded-lg border px-3 py-1.5 text-sm">
-              Kanban
-            </Link>
-            <Link href="/app/opportunities/new" className="rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground">
-              Add opportunity
-            </Link>
+            <ButtonLink href={view === "kanban" ? "/app/opportunities" : "/app/opportunities?view=kanban"} variant="outline">
+              {view === "kanban" ? "Table" : "Kanban"}
+            </ButtonLink>
+            <ButtonLink href="/app/opportunities/new">Add opportunity</ButtonLink>
           </div>
         }
       />
       {view === "kanban" ? (
-        <div className="grid gap-3 overflow-x-auto md:grid-cols-4">
+        <div className="grid gap-3 overflow-x-auto pb-2 md:grid-cols-4">
           {OPPORTUNITY_STAGES.map((stage) => (
-            <div key={stage} className="min-w-[220px] rounded-xl border bg-background p-3">
-              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <Panel key={stage} className="min-w-[220px] p-3">
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 {stage.replaceAll("_", " ")}
               </div>
               <div className="space-y-2">
-                {rows
-                  .filter((row) => row.stage === stage)
-                  .map((row) => (
-                    <form key={row.id} action={updateOpportunityStageAction} className="rounded-lg border p-3">
-                      <div className="text-sm font-medium">{row.title}</div>
-                      <div className="mt-1 text-xs text-muted-foreground">{formatMoney(row.estimated_value, ctx.membership.currency)}</div>
-                      <input type="hidden" name="id" value={row.id} />
-                      <AutoSubmitSelect name="stage" defaultValue={row.stage} options={[...OPPORTUNITY_STAGES]} />
-                    </form>
-                  ))}
+                {rows.filter((row) => row.stage === stage).length === 0 ? (
+                  <p className="px-1 py-6 text-center text-xs text-muted-foreground">None</p>
+                ) : (
+                  rows
+                    .filter((row) => row.stage === stage)
+                    .map((row) => (
+                      <form key={row.id} action={updateOpportunityStageAction} className="rounded-lg border bg-background p-3">
+                        <div className="text-sm font-medium">{row.title}</div>
+                        <div className="mt-1 text-xs text-muted-foreground">{formatMoney(row.estimated_value, ctx.membership.currency)}</div>
+                        <input type="hidden" name="id" value={row.id} />
+                        <AutoSubmitSelect name="stage" defaultValue={row.stage} options={[...OPPORTUNITY_STAGES]} />
+                      </form>
+                    ))
+                )}
               </div>
-            </div>
+            </Panel>
           ))}
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border bg-background">
-          <table className="min-w-full text-sm">
-            <thead className="bg-muted/50 text-left text-muted-foreground">
-              <tr>
-                <th className="px-3 py-2">Title</th>
-                <th className="px-3 py-2">Stage</th>
-                <th className="px-3 py-2">Value</th>
-                <th className="px-3 py-2">Probability</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.id} className="border-t">
-                  <td className="px-3 py-2">{row.title}</td>
-                  <td className="px-3 py-2">
-                    <StatusBadge value={row.stage} />
-                  </td>
-                  <td className="px-3 py-2 tabular-nums">{formatMoney(row.estimated_value, ctx.membership.currency)}</td>
-                  <td className="px-3 py-2">{row.probability}%</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          rows={rows}
+          emptyTitle="No opportunities yet"
+          emptyDescription="Add a lead before the tender document arrives."
+          emptyHref="/app/opportunities/new"
+          emptyAction="Add opportunity"
+          columns={[
+            { key: "title", header: "Title", cell: (row) => <span className="font-medium">{row.title}</span> },
+            { key: "stage", header: "Stage", cell: (row) => <StatusBadge value={row.stage} /> },
+            {
+              key: "value",
+              header: "Value",
+              align: "right",
+              cell: (row) => <span className="tabular-nums">{formatMoney(row.estimated_value, ctx.membership.currency)}</span>,
+            },
+            { key: "probability", header: "Probability", align: "right", cell: (row) => `${row.probability}%` },
+          ]}
+        />
       )}
     </div>
   );

@@ -7,7 +7,7 @@ export default function NewRfqPage() {
   return (
     <div className="max-w-xl">
       <PageHeader title="Create RFQ" />
-      <form action={createRfqAction} className="rounded-xl border bg-background p-6">
+      <form action={createRfqAction} className="rounded-xl border border-border/80 bg-card p-6 shadow-xs">
         <Field label="Title" name="title" required />
         <Field label="Description" name="description" />
         <Field label="Required delivery date" name="requiredDeliveryDate" type="date" />

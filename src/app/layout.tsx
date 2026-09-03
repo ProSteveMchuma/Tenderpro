@@ -6,7 +6,7 @@ import { APP_NAME, APP_TAGLINE } from "@/lib/constants";
 
 const sans = Geist({ variable: "--font-sans", subsets: ["latin"] });
 const mono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
-const serif = Source_Serif_4({ variable: "--font-heading", subsets: ["latin"] });
+const serif = Source_Serif_4({ variable: "--font-serif", subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: {

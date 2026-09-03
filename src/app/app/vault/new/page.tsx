@@ -8,10 +8,10 @@ export default function NewVaultDocumentPage() {
   return (
     <div className="max-w-xl">
       <PageHeader title="Upload company document" description="AI will extract certificate numbers and expiry dates when possible." />
-      <form action={uploadVaultDocumentAction} className="rounded-xl border bg-background p-6">
+      <form action={uploadVaultDocumentAction} className="rounded-xl border border-border/80 bg-card p-6 shadow-xs">
         <Field label="Document name" name="name" />
         <Field label="Category">
-          <select name="category" className="h-9 w-full rounded-lg border px-3 text-sm">
+          <select name="category" className="h-10 w-full rounded-lg border bg-background px-3 text-sm">
             {VAULT_CATEGORIES.map((category) => (
               <option key={category} value={category}>
                 {category.replaceAll("_", " ")}

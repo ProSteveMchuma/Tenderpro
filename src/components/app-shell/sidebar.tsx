@@ -2,139 +2,54 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  Bell,
-  Building2,
-  CalendarClock,
-  CircleDollarSign,
-  ClipboardList,
-  FileText,
-  LayoutDashboard,
-  Package,
-  Search,
-  Settings,
-  ShieldCheck,
-  ShoppingCart,
-  Truck,
-  Users,
-  Warehouse,
-  Wallet,
-} from "lucide-react";
 import { cn } from "@/lib/utils";
-
-type NavItem =
-  | { href: string; label: string; icon: React.ComponentType<{ className?: string }> }
-  | {
-      label: string;
-      items: { href: string; label: string; icon: React.ComponentType<{ className?: string }> }[];
-    };
-
-const NAV: NavItem[] = [
-  { href: "/app", label: "Overview", icon: LayoutDashboard },
-  {
-    label: "Sales & Opportunities",
-    items: [
-      { href: "/app/opportunities", label: "Opportunities", icon: Search },
-      { href: "/app/tenders", label: "Tenders", icon: FileText },
-    ],
-  },
-  {
-    label: "Orders",
-    items: [
-      { href: "/app/purchase-orders", label: "Purchase Orders", icon: ShoppingCart },
-      { href: "/app/deliveries", label: "Deliveries", icon: Truck },
-      { href: "/app/grns", label: "GRNs", icon: ClipboardList },
-    ],
-  },
-  {
-    label: "Finance",
-    items: [
-      { href: "/app/invoices", label: "Invoices", icon: FileText },
-      { href: "/app/receivables", label: "Receivables", icon: CircleDollarSign },
-      { href: "/app/payments", label: "Payments", icon: Wallet },
-    ],
-  },
-  {
-    label: "Procurement",
-    items: [
-      { href: "/app/rfqs", label: "RFQs", icon: ClipboardList },
-      { href: "/app/suppliers", label: "Suppliers", icon: Warehouse },
-      { href: "/app/quotations", label: "Quotations", icon: Package },
-    ],
-  },
-  {
-    label: "Compliance",
-    items: [
-      { href: "/app/vault", label: "Company Vault", icon: ShieldCheck },
-      { href: "/app/expiry-calendar", label: "Expiry Calendar", icon: CalendarClock },
-    ],
-  },
-  { href: "/app/analytics", label: "Analytics", icon: LayoutDashboard },
-  { href: "/app/notifications", label: "Notifications", icon: Bell },
-  { href: "/app/customers", label: "Customers", icon: Building2 },
-  { href: "/app/tasks", label: "Tasks", icon: ClipboardList },
-  { href: "/app/team", label: "Team", icon: Users },
-  { href: "/app/settings", label: "Settings", icon: Settings },
-  { href: "/app/subscription", label: "Subscription", icon: CircleDollarSign },
-];
+import { BrandLockup } from "@/components/brand/logo";
+import { isNavActive, NAV, type NavLeaf } from "@/components/app-shell/nav";
 
 export function Sidebar({ organizationName }: { organizationName: string }) {
   const pathname = usePathname();
   return (
-    <aside className="hidden w-64 shrink-0 border-r bg-sidebar text-sidebar-foreground lg:flex lg:flex-col">
-      <div className="border-b px-4 py-4">
-        <Link href="/app" className="block">
-          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">SupplierOS</div>
-          <div className="mt-1 truncate text-sm font-medium">{organizationName}</div>
-        </Link>
+    <aside className="hidden w-[16.5rem] shrink-0 bg-sidebar text-sidebar-foreground lg:flex lg:flex-col">
+      <div className="border-b border-sidebar-border px-4 py-4">
+        <BrandLockup href="/app" inverted subtitle={organizationName} compact />
       </div>
-      <nav className="flex-1 overflow-y-auto px-3 py-3">
+      <nav className="flex-1 overflow-y-auto px-3 py-4 [scrollbar-width:thin]">
         {NAV.map((item) =>
           "items" in item ? (
-            <div key={item.label} className="mb-3">
-              <div className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <div key={item.label} className="mb-4">
+              <div className="px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-sidebar-foreground/45">
                 {item.label}
               </div>
               {item.items.map((child) => (
-                <NavLink key={child.href} href={child.href} label={child.label} icon={child.icon} active={pathname === child.href || pathname.startsWith(child.href + "/")} />
+                <NavLink key={child.href} item={child} active={isNavActive(pathname, child.href)} />
               ))}
             </div>
           ) : (
-            <NavLink
-              key={item.href}
-              href={item.href}
-              label={item.label}
-              icon={item.icon}
-              active={item.href === "/app" ? pathname === "/app" : pathname === item.href || pathname.startsWith(item.href + "/")}
-            />
+            <NavLink key={item.href} item={item} active={isNavActive(pathname, item.href)} />
           ),
         )}
       </nav>
+      <div className="border-t border-sidebar-border px-4 py-3 text-[11px] text-sidebar-foreground/45">
+        From tender to payment
+      </div>
     </aside>
   );
 }
 
-function NavLink({
-  href,
-  label,
-  icon: Icon,
-  active,
-}: {
-  href: string;
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-  active: boolean;
-}) {
+export function NavLink({ item, active }: { item: NavLeaf; active: boolean }) {
+  const Icon = item.icon;
   return (
     <Link
-      href={href}
+      href={item.href}
       className={cn(
-        "mb-0.5 flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm",
-        active ? "bg-sidebar-accent font-medium text-foreground" : "text-muted-foreground hover:bg-sidebar-accent hover:text-foreground",
+        "mb-0.5 flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors",
+        active
+          ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground shadow-sm"
+          : "text-sidebar-foreground/70 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground",
       )}
     >
-      <Icon className="size-4" />
-      {label}
+      <Icon className={cn("size-4 shrink-0", active ? "text-sidebar-primary" : "opacity-80")} />
+      {item.label}
     </Link>
   );
 }

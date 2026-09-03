@@ -13,11 +13,11 @@ export default async function NewGrnPage() {
   return (
     <div className="max-w-xl">
       <PageHeader title="Record GRN" />
-      <form action={createGrnAction} className="rounded-xl border bg-background p-6">
+      <form action={createGrnAction} className="rounded-xl border border-border/80 bg-card p-6 shadow-xs">
         <Field label="GRN number" name="number" />
-        <Field label="Customer"><select name="customerId" className="h-9 w-full rounded-lg border px-3 text-sm">{customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
-        <Field label="Purchase order"><select name="purchaseOrderId" className="h-9 w-full rounded-lg border px-3 text-sm">{pos.map((p) => <option key={p.id} value={p.id}>{p.number}</option>)}</select></Field>
-        <Field label="Delivery"><select name="deliveryId" className="h-9 w-full rounded-lg border px-3 text-sm"><option value="">None</option>{deliveries.map((d) => <option key={d.id} value={d.id}>{d.number}</option>)}</select></Field>
+        <Field label="Customer"><select name="customerId" className="h-10 w-full rounded-lg border bg-background px-3 text-sm">{customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
+        <Field label="Purchase order"><select name="purchaseOrderId" className="h-10 w-full rounded-lg border bg-background px-3 text-sm">{pos.map((p) => <option key={p.id} value={p.id}>{p.number}</option>)}</select></Field>
+        <Field label="Delivery"><select name="deliveryId" className="h-10 w-full rounded-lg border bg-background px-3 text-sm"><option value="">None</option>{deliveries.map((d) => <option key={d.id} value={d.id}>{d.number}</option>)}</select></Field>
         <Field label="GRN date" name="grnDate" type="date" />
         <input type="hidden" name="status" value="signed" />
         <label className="mb-4 block text-sm"><span className="mb-1 block font-medium">Signed GRN file</span><input type="file" name="file" className="block w-full text-sm" /></label>

@@ -1,7 +1,8 @@
-import Link from "next/link";
 import { query } from "@/lib/db/client";
 import { requirePermission } from "@/lib/auth/session";
 import { PageHeader, StatusBadge } from "@/components/shared/chrome";
+import { ButtonLink } from "@/components/shared/button-link";
+import { DataTable } from "@/components/shared/data-table";
 import { formatMoney } from "@/lib/money";
 import { canInvoicePurchaseOrder } from "@/lib/domain/invoice";
 
@@ -28,45 +29,40 @@ export default async function PurchaseOrdersPage() {
     <div>
       <PageHeader
         title="Purchase Orders"
-        action={
-          <Link href="/app/purchase-orders/new" className="rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground">
-            New PO
-          </Link>
-        }
+        description="Track each LPO from receipt through delivery, GRN and invoicing."
+        action={<ButtonLink href="/app/purchase-orders/new">New PO</ButtonLink>}
       />
-      <div className="overflow-x-auto rounded-xl border bg-background">
-        <table className="min-w-full text-sm">
-          <thead className="bg-muted/50 text-left text-muted-foreground">
-            <tr>
-              <th className="px-3 py-2">PO</th>
-              <th className="px-3 py-2">Customer</th>
-              <th className="px-3 py-2">Value</th>
-              <th className="px-3 py-2">Status</th>
-              <th className="px-3 py-2">Invoicing</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => {
+      <DataTable
+        rows={rows}
+        getHref={(row) => `/app/purchase-orders/${row.id}`}
+        emptyTitle="No purchase orders"
+        emptyDescription="Record an LPO when an award comes in."
+        emptyHref="/app/purchase-orders/new"
+        emptyAction="New PO"
+        columns={[
+          { key: "number", header: "PO", cell: (row) => <span className="font-medium">{row.number}</span> },
+          { key: "customer", header: "Customer", cell: (row) => row.customer || "—" },
+          {
+            key: "value",
+            header: "Value",
+            align: "right",
+            cell: (row) => <span className="tabular-nums">{formatMoney(row.total, ctx.membership.currency)}</span>,
+          },
+          { key: "status", header: "Status", cell: (row) => <StatusBadge value={row.status} /> },
+          {
+            key: "invoicing",
+            header: "Invoicing",
+            cell: (row) => {
               const gate = canInvoicePurchaseOrder({ requiresGrn: row.requires_grn, hasSignedGrn: row.has_grn });
-              return (
-                <tr key={row.id} className="border-t">
-                  <td className="px-3 py-2">
-                    <Link className="font-medium hover:underline" href={`/app/purchase-orders/${row.id}`}>
-                      {row.number}
-                    </Link>
-                  </td>
-                  <td className="px-3 py-2">{row.customer}</td>
-                  <td className="px-3 py-2 tabular-nums">{formatMoney(row.total, ctx.membership.currency)}</td>
-                  <td className="px-3 py-2">
-                    <StatusBadge value={row.status} />
-                  </td>
-                  <td className="px-3 py-2 text-xs">{gate.allowed ? "Ready" : gate.warning}</td>
-                </tr>
+              return gate.allowed ? (
+                <StatusBadge value="ready" />
+              ) : (
+                <span className="text-xs text-amber-800 dark:text-amber-200">{gate.warning}</span>
               );
-            })}
-          </tbody>
-        </table>
-      </div>
+            },
+          },
+        ]}
+      />
     </div>
   );
 }

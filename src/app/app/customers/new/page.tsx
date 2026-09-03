@@ -8,10 +8,10 @@ export default function NewCustomerPage() {
   return (
     <div className="max-w-xl">
       <PageHeader title="Add customer" description="Track every buyer you supply." />
-      <form action={createCustomerAction} className="rounded-xl border bg-background p-6">
+      <form action={createCustomerAction} className="rounded-xl border border-border/80 bg-card p-6 shadow-xs">
         <Field label="Organization name" name="name" required />
         <Field label="Type">
-          <select name="type" className="h-9 w-full rounded-lg border px-3 text-sm">
+          <select name="type" className="h-10 w-full rounded-lg border bg-background px-3 text-sm">
             {CUSTOMER_TYPES.map((type) => (
               <option key={type} value={type}>
                 {type.replaceAll("_", " ")}

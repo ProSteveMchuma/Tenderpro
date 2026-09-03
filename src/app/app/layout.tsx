@@ -3,7 +3,7 @@ import { getAuthContext } from "@/lib/auth/session";
 import { Sidebar } from "@/components/app-shell/sidebar";
 import { Topbar } from "@/components/app-shell/topbar";
 import { remainingTrialDays } from "@/lib/entitlements";
-import Link from "next/link";
+import { ButtonLink } from "@/components/shared/button-link";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const ctx = await getAuthContext();
@@ -11,11 +11,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!ctx.membership.onboardingCompletedAt) redirect("/onboarding");
   const trialDays = remainingTrialDays(ctx.membership.trialEndsAt);
   return (
-    <div className="flex min-h-screen bg-muted/30">
+    <div className="flex min-h-screen bg-background">
       <Sidebar organizationName={ctx.membership.organizationName} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar
           userName={ctx.user.fullName}
+          organizationName={ctx.membership.organizationName}
           currentOrgId={ctx.membership.organizationId}
           memberships={ctx.memberships.map((item) => ({
             organizationId: item.organizationId,
@@ -23,30 +24,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           }))}
         />
         {ctx.membership.subscriptionStatus === "trialing" ? (
-          <div className="border-b bg-amber-50 px-4 py-2 text-sm text-amber-950 dark:bg-amber-950/40 dark:text-amber-100">
-            Business trial · {trialDays} day{trialDays === 1 ? "" : "s"} remaining.{" "}
-            <Link href="/app/subscription" className="font-medium underline">
+          <div className="flex items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+            <p>
+              Business trial · <span className="font-medium">{trialDays} day{trialDays === 1 ? "" : "s"} remaining</span>
+            </p>
+            <ButtonLink href="/app/subscription" size="sm" variant="outline" className="border-amber-300 bg-white/70">
               Upgrade
-            </Link>
+            </ButtonLink>
           </div>
         ) : null}
-        <main className="flex-1 px-4 py-6 lg:px-8">
-          <nav className="mb-4 flex gap-2 overflow-x-auto pb-2 text-sm lg:hidden">
-            {[
-              ["/app", "Overview"],
-              ["/app/tenders", "Tenders"],
-              ["/app/invoices", "Invoices"],
-              ["/app/receivables", "Receivables"],
-              ["/app/vault", "Vault"],
-              ["/app/purchase-orders", "POs"],
-            ].map(([href, label]) => (
-              <Link key={href} href={href} className="whitespace-nowrap rounded-full border px-3 py-1">
-                {label}
-              </Link>
-            ))}
-          </nav>
-          {children}
-        </main>
+        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 pb-24 lg:px-8 lg:pb-8">{children}</main>
       </div>
     </div>
   );

@@ -1,9 +1,11 @@
-import Link from "next/link";
 import { query } from "@/lib/db/client";
 import { requirePermission } from "@/lib/auth/session";
-import { PageHeader, StatusBadge } from "@/components/shared/chrome";
+import { KpiCard, PageHeader, StatusBadge } from "@/components/shared/chrome";
+import { ButtonLink } from "@/components/shared/button-link";
+import { DataTable } from "@/components/shared/data-table";
 import { expiryStatus } from "@/lib/dates";
 import { VAULT_CATEGORIES } from "@/lib/constants";
+import { AlertTriangle, CheckCircle2, Clock } from "lucide-react";
 
 export default async function VaultPage() {
   const ctx = await requirePermission("vault.read");
@@ -30,46 +32,35 @@ export default async function VaultPage() {
       <PageHeader
         title="Company Vault"
         description="The compliance library every tender is checked against."
-        action={
-          <Link href="/app/vault/new" className="rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground">
-            Upload document
-          </Link>
-        }
+        action={<ButtonLink href="/app/vault/new">Upload document</ButtonLink>}
       />
-      <div className="mb-4 grid gap-3 sm:grid-cols-3">
-        <div className="rounded-xl border p-4 text-sm">Valid {counts.valid}</div>
-        <div className="rounded-xl border p-4 text-sm">Expiring soon {counts.expiring_soon}</div>
-        <div className="rounded-xl border p-4 text-sm">Expired {counts.expired}</div>
+      <div className="mb-6 grid gap-3 sm:grid-cols-3">
+        <KpiCard label="Valid" value={String(counts.valid)} icon={CheckCircle2} tone="success" />
+        <KpiCard label="Expiring soon" value={String(counts.expiring_soon)} icon={Clock} tone={counts.expiring_soon ? "warning" : "default"} />
+        <KpiCard label="Expired" value={String(counts.expired)} icon={AlertTriangle} tone={counts.expired ? "danger" : "default"} />
       </div>
-      <div className="overflow-x-auto rounded-xl border bg-background">
-        <table className="min-w-full text-sm">
-          <thead className="bg-muted/50 text-left text-muted-foreground">
-            <tr>
-              <th className="px-3 py-2">Document</th>
-              <th className="px-3 py-2">Category</th>
-              <th className="px-3 py-2">Number</th>
-              <th className="px-3 py-2">Expiry</th>
-              <th className="px-3 py-2">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => {
-              const status = expiryStatus(row.expiry_date, 30, now);
-              return (
-                <tr key={row.id} className="border-t">
-                  <td className="px-3 py-2 font-medium">{row.name}</td>
-                  <td className="px-3 py-2">{VAULT_CATEGORIES.includes(row.category as never) ? row.category.replaceAll("_", " ") : row.category}</td>
-                  <td className="px-3 py-2">{row.document_number}</td>
-                  <td className="px-3 py-2">{row.expiry_date || "No expiry"}</td>
-                  <td className="px-3 py-2">
-                    <StatusBadge value={status} />
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        rows={rows}
+        emptyTitle="Vault is empty"
+        emptyDescription="Upload certificates, licences and audited accounts so tenders can be checked automatically."
+        emptyHref="/app/vault/new"
+        emptyAction="Upload document"
+        columns={[
+          { key: "name", header: "Document", cell: (row) => <span className="font-medium">{row.name}</span> },
+          {
+            key: "category",
+            header: "Category",
+            cell: (row) => (
+              <span className="capitalize">
+                {VAULT_CATEGORIES.includes(row.category as never) ? row.category.replaceAll("_", " ") : row.category}
+              </span>
+            ),
+          },
+          { key: "number", header: "Number", hideOnMobile: true, cell: (row) => row.document_number || "—" },
+          { key: "expiry", header: "Expiry", cell: (row) => row.expiry_date || "No expiry" },
+          { key: "status", header: "Status", cell: (row) => <StatusBadge value={expiryStatus(row.expiry_date, 30, now)} /> },
+        ]}
+      />
     </div>
   );
 }

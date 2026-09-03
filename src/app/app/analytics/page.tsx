@@ -1,6 +1,6 @@
 import { query } from "@/lib/db/client";
 import { requirePermission } from "@/lib/auth/session";
-import { PageHeader } from "@/components/shared/chrome";
+import { PageHeader, Panel, PanelHeader } from "@/components/shared/chrome";
 import { formatMoney } from "@/lib/money";
 
 export default async function AnalyticsPage() {
@@ -13,26 +13,44 @@ export default async function AnalyticsPage() {
     [ctx.membership.organizationId],
   );
   const tenderStats = await queryOneStats(ctx.membership.organizationId);
+  const max = Math.max(...byCustomer.map((row) => Number(row.total || 0)), 1);
   return (
     <div>
       <PageHeader title="Analytics" description="Tenant-private performance. Cross-organization payment intelligence is modelled but not exposed." />
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-xl border bg-background p-4">
-          <h2 className="font-medium">Sales by customer</h2>
-          <div className="mt-3 space-y-2 text-sm">
+        <Panel>
+          <PanelHeader title="Sales by customer" />
+          <div className="space-y-3 p-4">
             {byCustomer.map((row) => (
-              <div key={row.name} className="flex justify-between"><span>{row.name}</span><span className="tabular-nums">{formatMoney(row.total, ctx.membership.currency)}</span></div>
+              <div key={row.name}>
+                <div className="mb-1 flex justify-between text-sm">
+                  <span>{row.name}</span>
+                  <span className="tabular-nums">{formatMoney(row.total, ctx.membership.currency)}</span>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                  <div className="h-full rounded-full bg-primary" style={{ width: `${(Number(row.total || 0) / max) * 100}%` }} />
+                </div>
+              </div>
             ))}
           </div>
-        </div>
-        <div className="rounded-xl border bg-background p-4">
-          <h2 className="font-medium">Tender outcomes</h2>
-          <div className="mt-3 space-y-2 text-sm">
-            <div className="flex justify-between"><span>Submitted / active</span><span>{tenderStats.active}</span></div>
-            <div className="flex justify-between"><span>Awards</span><span>{tenderStats.awarded}</span></div>
-            <div className="flex justify-between"><span>Losses</span><span>{tenderStats.lost}</span></div>
+        </Panel>
+        <Panel>
+          <PanelHeader title="Tender outcomes" />
+          <div className="space-y-3 p-4 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Submitted / active</span>
+              <span className="tabular-nums">{tenderStats.active}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Awards</span>
+              <span className="tabular-nums">{tenderStats.awarded}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Losses</span>
+              <span className="tabular-nums">{tenderStats.lost}</span>
+            </div>
           </div>
-        </div>
+        </Panel>
       </div>
     </div>
   );

@@ -1,33 +1,38 @@
 "use client";
 
+import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { Menu } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { BrandLockup } from "@/components/brand/logo";
 import { NavLink } from "@/components/app-shell/sidebar";
 import { isNavActive, MOBILE_TABS, NAV } from "@/components/app-shell/nav";
-import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 export function MobileNav({ organizationName }: { organizationName: string }) {
   const pathname = usePathname();
+  const [open, setOpen] = useState(false);
   return (
     <>
-      <Sheet>
-        <SheetTrigger
-          render={
-            <Button variant="ghost" size="icon" className="lg:hidden" aria-label="Open navigation" />
-          }
-        >
-          <Menu className="size-5" />
-        </SheetTrigger>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="shrink-0 lg:hidden"
+        aria-label="Open navigation"
+        onClick={() => setOpen(true)}
+      >
+        <Menu className="size-5" />
+      </Button>
+      <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="left" className="w-[18rem] bg-sidebar p-0 text-sidebar-foreground">
           <SheetHeader className="border-b border-sidebar-border px-4 py-4">
             <SheetTitle className="sr-only">Navigation</SheetTitle>
             <BrandLockup href="/app" inverted subtitle={organizationName} compact />
           </SheetHeader>
-          <nav className="overflow-y-auto px-3 py-4">
+          <nav className="overflow-y-auto px-3 py-4" onClick={() => setOpen(false)}>
             {NAV.map((item) =>
               "items" in item ? (
                 <div key={item.label} className="mb-4">

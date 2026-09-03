@@ -1,18 +1,29 @@
-import { query } from "@/lib/db/client";
+import { listByOrg } from "@/lib/db/repo";
+import { asString, moneyString } from "@/lib/db/types";
 import { requirePermission } from "@/lib/auth/session";
 import { PageHeader } from "@/components/shared/chrome";
-import { formatMoney } from "@/lib/money";
+import { addMoney, formatMoney } from "@/lib/money";
 
 export default async function AnalyticsPage() {
   const ctx = await requirePermission("analytics.read");
-  const byCustomer = await query<{ name: string; total: string }>(
-    `select c.name, coalesce(sum(i.total),0)::text as total
-     from customers c left join invoices i on i.customer_id=c.id and i.deleted_at is null
-     where c.organization_id=$1 and c.deleted_at is null
-     group by c.name order by sum(i.total) desc nulls last`,
-    [ctx.membership.organizationId],
-  );
-  const tenderStats = await queryOneStats(ctx.membership.organizationId);
+  const orgId = ctx.membership.organizationId;
+  const customers = await listByOrg("customers", orgId);
+  const invoices = await listByOrg("invoices", orgId);
+  const byCustomer = customers
+    .map((customer) => {
+      const related = invoices.filter((invoice) => asString(invoice.customerId) === asString(customer.id));
+      return {
+        name: asString(customer.name),
+        total: related.reduce((sum, invoice) => addMoney(sum, moneyString(invoice.total)), "0"),
+      };
+    })
+    .sort((a, b) => Number(b.total) - Number(a.total));
+  const tenders = await listByOrg("tenders", orgId);
+  const tenderStats = {
+    active: tenders.filter((row) => !["lost", "cancelled"].includes(asString(row.status))).length,
+    awarded: tenders.filter((row) => asString(row.status) === "awarded").length,
+    lost: tenders.filter((row) => asString(row.status) === "lost").length,
+  };
   return (
     <div>
       <PageHeader title="Analytics" description="Tenant-private performance. Cross-organization payment intelligence is modelled but not exposed." />
@@ -36,17 +47,4 @@ export default async function AnalyticsPage() {
       </div>
     </div>
   );
-}
-
-async function queryOneStats(orgId: string) {
-  const { queryOne } = await import("@/lib/db/client");
-  const row = await queryOne<{ active: number; awarded: number; lost: number }>(
-    `select
-       count(*) filter (where status not in ('lost','cancelled'))::int as active,
-       count(*) filter (where status='awarded')::int as awarded,
-       count(*) filter (where status='lost')::int as lost
-     from tenders where organization_id=$1 and deleted_at is null`,
-    [orgId],
-  );
-  return row ?? { active: 0, awarded: 0, lost: 0 };
 }

@@ -2,9 +2,12 @@
 
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { createHash } from "node:crypto";
 import { COUNTRIES, TRIAL_DAYS } from "@/lib/constants";
-import { query, queryOne } from "@/lib/db/client";
 import { bootstrapDatabase } from "@/lib/db/bootstrap";
+import { getDatabaseDriver } from "@/lib/db/client";
+import { createDoc, docs, findProfileByEmail, patchDoc, saveDoc } from "@/lib/db/repo";
+import { asString, newId, nowIso } from "@/lib/db/types";
 import {
   clearSession,
   getMemberships,
@@ -15,7 +18,6 @@ import {
 } from "@/lib/auth/session";
 import { addDaysIso } from "@/lib/dates";
 import { getEmailProvider } from "@/lib/email";
-import { createHash } from "node:crypto";
 
 const signupSchema = z.object({
   fullName: z.string().min(2),
@@ -39,45 +41,64 @@ export async function signUpAction(formData: FormData) {
   if (!parsed.success) {
     return { error: "Please complete all required fields with a valid email and 8+ character password." };
   }
-  const existing = await queryOne("select id from profiles where lower(email) = lower($1)", [parsed.data.email]);
+
+  if (getDatabaseDriver() !== "firestore") {
+    return { error: "Signup currently requires DATABASE_DRIVER=firestore in this build." };
+  }
+
+  const existing = await findProfileByEmail(parsed.data.email);
   if (existing) return { error: "An account with this email already exists." };
 
   const country = COUNTRIES.find((item) => item.code === parsed.data.country) ?? COUNTRIES[0];
-  const userId = crypto.randomUUID();
-  const orgId = crypto.randomUUID();
+  const userId = newId();
+  const orgId = newId();
   const passwordHash = await hashPassword(parsed.data.password);
+  const email = parsed.data.email.toLowerCase();
 
-  await query(
-    `insert into profiles (id, email, full_name, phone, country, password_hash, email_verified_at)
-     values ($1,$2,$3,$4,$5,$6,now())`,
-    [userId, parsed.data.email.toLowerCase(), parsed.data.fullName, parsed.data.phone, country.code, passwordHash],
-  );
-  await query(
-    `insert into organizations (id, name, legal_name, trading_name, country, currency, timezone, vat_rate, phone, email, created_by)
-     values ($1,$2,$2,$2,$3,$4,$5,$6,$7,$8,$9)`,
-    [
-      orgId,
-      parsed.data.companyName,
-      country.code,
-      country.currency,
-      country.timezone,
-      country.vat,
-      parsed.data.phone,
-      parsed.data.email.toLowerCase(),
-      userId,
-    ],
-  );
-  await query(
-    `insert into organization_members (id, organization_id, user_id, role, status)
-     values (gen_random_uuid(),$1,$2,'owner','active')`,
-    [orgId, userId],
-  );
-  await query(
-    `insert into subscriptions (id, organization_id, plan_id, status, trial_ends_at, current_period_end, provider)
-     values (gen_random_uuid(),$1,'business','trialing',$2,$2,'development')`,
-    [orgId, addDaysIso(new Date(), TRIAL_DAYS)],
-  );
-  await query(`insert into organization_settings (organization_id) values ($1)`, [orgId]);
+  await saveDoc("profiles", userId, {
+    email,
+    emailLower: email,
+    fullName: parsed.data.fullName,
+    phone: parsed.data.phone,
+    country: country.code,
+    passwordHash,
+    emailVerifiedAt: nowIso(),
+    deletedAt: null,
+  });
+  await saveDoc("organizations", orgId, {
+    name: parsed.data.companyName,
+    legalName: parsed.data.companyName,
+    tradingName: parsed.data.companyName,
+    country: country.code,
+    currency: country.currency,
+    timezone: country.timezone,
+    vatRate: country.vat,
+    phone: parsed.data.phone,
+    email,
+    createdBy: userId,
+    onboardingCompletedAt: null,
+    deletedAt: null,
+  });
+  await createDoc("organization_members", {
+    organizationId: orgId,
+    userId,
+    role: "owner",
+    status: "active",
+    deletedAt: null,
+  });
+  await createDoc("subscriptions", {
+    organizationId: orgId,
+    planId: "business",
+    status: "trialing",
+    trialEndsAt: addDaysIso(new Date(), TRIAL_DAYS),
+    currentPeriodEnd: addDaysIso(new Date(), TRIAL_DAYS),
+    provider: "development",
+  });
+  await saveDoc("organization_settings", orgId, {
+    organizationId: orgId,
+    reminderDays: [90, 60, 30, 14, 7, 1],
+  });
+
   await setSession(userId, orgId);
   await getEmailProvider().send({
     to: parsed.data.email,
@@ -118,21 +139,19 @@ export async function switchOrganizationAction(formData: FormData) {
 export async function forgotPasswordAction(formData: FormData) {
   await bootstrapDatabase();
   const email = String(formData.get("email") || "");
-  const user = await queryOne<{ id: string; email: string }>(
-    "select id, email from profiles where lower(email) = lower($1)",
-    [email],
-  );
+  const user = await findProfileByEmail(email);
   if (user) {
-    const token = crypto.randomUUID();
+    const token = newId();
     const tokenHash = createHash("sha256").update(token).digest("hex");
-    await query(
-      `insert into password_reset_tokens (id, user_id, token_hash, expires_at)
-       values (gen_random_uuid(),$1,$2, now() + interval '2 hours')`,
-      [user.id, tokenHash],
-    );
+    await createDoc("password_reset_tokens", {
+      userId: asString(user.id),
+      tokenHash,
+      expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+      usedAt: null,
+    });
     const url = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/reset-password?token=${token}`;
     await getEmailProvider().send({
-      to: user.email,
+      to: asString(user.email),
       subject: "Reset your SupplierOS password",
       html: `<p>Reset your password: <a href="${url}">${url}</a></p>`,
       text: `Reset your password: ${url}`,
@@ -147,18 +166,15 @@ export async function resetPasswordAction(formData: FormData) {
   const password = String(formData.get("password") || "");
   if (password.length < 8) return { error: "Password must be at least 8 characters." };
   const tokenHash = createHash("sha256").update(token).digest("hex");
-  const row = await queryOne<{ id: string; user_id: string }>(
-    `select id, user_id from password_reset_tokens
-     where token_hash = $1 and used_at is null and expires_at > now()`,
-    [tokenHash],
-  );
+  const rows = await docs("password_reset_tokens", {
+    where: [{ field: "tokenHash", op: "==", value: tokenHash }],
+    limit: 5,
+  });
+  const row = rows.find((item) => !item.usedAt && new Date(asString(item.expiresAt)).getTime() > Date.now());
   if (!row) return { error: "This reset link is invalid or has expired." };
   const passwordHash = await hashPassword(password);
-  await query("update profiles set password_hash = $1, updated_at = now() where id = $2", [
-    passwordHash,
-    row.user_id,
-  ]);
-  await query("update password_reset_tokens set used_at = now() where id = $1", [row.id]);
+  await patchDoc("profiles", asString(row.userId), { passwordHash });
+  await patchDoc("password_reset_tokens", asString(row.id), { usedAt: nowIso() });
   return { ok: true };
 }
 
@@ -166,29 +182,21 @@ export async function completeOnboardingAction(formData: FormData) {
   const ctx = await requireAuth();
   const orgId = ctx.membership.organizationId;
   const goals = formData.getAll("goals").map(String);
-  await query(
-    `update organizations set
-      legal_name = $1, trading_name = $2, registration_number = $3, tax_pin = $4,
-      country = $5, currency = $6, vat_registered = $7, phone = $8, email = $9,
-      website = $10, address = $11, business_type = $12, onboarding_goals = $13::jsonb,
-      onboarding_completed_at = now(), updated_at = now()
-     where id = $14`,
-    [
-      String(formData.get("legalName") || ctx.membership.organizationName),
-      String(formData.get("tradingName") || ""),
-      String(formData.get("registrationNumber") || ""),
-      String(formData.get("taxPin") || ""),
-      String(formData.get("country") || "KE"),
-      String(formData.get("currency") || "KES"),
-      formData.get("vatRegistered") === "on" || formData.get("vatRegistered") === "true",
-      String(formData.get("phone") || ""),
-      String(formData.get("email") || ctx.user.email),
-      String(formData.get("website") || ""),
-      String(formData.get("address") || ""),
-      String(formData.get("businessType") || "General Supplier"),
-      JSON.stringify(goals),
-      orgId,
-    ],
-  );
+  await patchDoc("organizations", orgId, {
+    legalName: String(formData.get("legalName") || ctx.membership.organizationName),
+    tradingName: String(formData.get("tradingName") || ""),
+    registrationNumber: String(formData.get("registrationNumber") || ""),
+    taxPin: String(formData.get("taxPin") || ""),
+    country: String(formData.get("country") || "KE"),
+    currency: String(formData.get("currency") || "KES"),
+    vatRegistered: formData.get("vatRegistered") === "on" || formData.get("vatRegistered") === "true",
+    phone: String(formData.get("phone") || ""),
+    email: String(formData.get("email") || ctx.user.email),
+    website: String(formData.get("website") || ""),
+    address: String(formData.get("address") || ""),
+    businessType: String(formData.get("businessType") || "General Supplier"),
+    onboardingGoals: goals,
+    onboardingCompletedAt: nowIso(),
+  });
   redirect("/app");
 }

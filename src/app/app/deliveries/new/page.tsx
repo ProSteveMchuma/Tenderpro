@@ -1,6 +1,7 @@
 import { createDeliveryAction } from "@/app/actions/records";
 import { requirePermission } from "@/lib/auth/session";
-import { query } from "@/lib/db/client";
+import { listByOrg } from "@/lib/db/repo";
+import { asString } from "@/lib/db/types";
 import { PageHeader } from "@/components/shared/chrome";
 import { Field } from "@/components/auth/auth-card";
 import { Button } from "@/components/ui/button";
@@ -8,8 +9,9 @@ import { DELIVERY_STATUSES } from "@/lib/constants";
 
 export default async function NewDeliveryPage() {
   const ctx = await requirePermission("deliveries.write");
-  const customers = await query<{ id: string; name: string }>("select id, name from customers where organization_id=$1 and deleted_at is null", [ctx.membership.organizationId]);
-  const pos = await query<{ id: string; number: string }>("select id, number from purchase_orders where organization_id=$1 and deleted_at is null", [ctx.membership.organizationId]);
+  const orgId = ctx.membership.organizationId;
+  const customers = (await listByOrg("customers", orgId)).map((c) => ({ id: asString(c.id), name: asString(c.name) }));
+  const pos = (await listByOrg("purchase_orders", orgId)).map((p) => ({ id: asString(p.id), number: asString(p.number) }));
   return (
     <div className="max-w-xl">
       <PageHeader title="Record delivery" />

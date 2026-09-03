@@ -1,5 +1,7 @@
-import { query, queryOne } from "@/lib/db/client";
 import { AuthContext } from "@/lib/auth/session";
+import { getDatabaseDriver } from "@/lib/db/client";
+import { createDoc, listByOrg, nextSequence } from "@/lib/db/repo";
+import { asString, moneyString as moneyField } from "@/lib/db/types";
 import { addMoney, moneyString } from "@/lib/money";
 import { ageingBucket, daysOverdue, daysUntil, expiryStatus } from "@/lib/dates";
 import { calculateTenderReadiness } from "@/lib/domain/tender-readiness";
@@ -9,41 +11,38 @@ export async function logActivity(
   ctx: AuthContext,
   input: { entityType: string; entityId?: string | null; action: string; summary: string },
 ) {
-  await query(
-    `insert into activity_events (id, organization_id, actor_id, actor_name, entity_type, entity_id, action, summary)
-     values (gen_random_uuid(),$1,$2,$3,$4,$5,$6,$7)`,
-    [
-      ctx.membership.organizationId,
-      ctx.user.id,
-      ctx.user.fullName,
-      input.entityType,
-      input.entityId ?? null,
-      input.action,
-      input.summary,
-    ],
-  );
+  await createDoc("activity_events", {
+    organizationId: ctx.membership.organizationId,
+    actorId: ctx.user.id,
+    actorName: ctx.user.fullName,
+    entityType: input.entityType,
+    entityId: input.entityId ?? null,
+    action: input.action,
+    summary: input.summary,
+  });
 }
 
 export async function notify(
   ctx: AuthContext,
   input: { type: string; title: string; body: string; entityType?: string; entityId?: string },
 ) {
-  await query(
-    `insert into notifications (id, organization_id, user_id, type, title, body, entity_type, entity_id)
-     values (gen_random_uuid(),$1,$2,$3,$4,$5,$6,$7)`,
-    [
-      ctx.membership.organizationId,
-      ctx.user.id,
-      input.type,
-      input.title,
-      input.body,
-      input.entityType ?? null,
-      input.entityId ?? null,
-    ],
-  );
+  await createDoc("notifications", {
+    organizationId: ctx.membership.organizationId,
+    userId: ctx.user.id,
+    type: input.type,
+    title: input.title,
+    body: input.body,
+    entityType: input.entityType ?? null,
+    entityId: input.entityId ?? null,
+    readAt: null,
+  });
 }
 
 export async function nextNumber(organizationId: string, kind: string, prefix: string) {
+  if (getDatabaseDriver() === "firestore") {
+    return nextSequence(organizationId, kind, prefix);
+  }
+  const { queryOne } = await import("@/lib/db/client");
   const row = await queryOne<{ next_number: number }>(
     `insert into sequences (organization_id, kind, next_number)
      values ($1,$2,2)
@@ -58,218 +57,195 @@ export async function nextNumber(organizationId: string, kind: string, prefix: s
 
 export async function getDashboardData(ctx: AuthContext) {
   const orgId = ctx.membership.organizationId;
-  const invoices = await query<{
-    id: string;
-    number: string;
-    due_date: string;
-    outstanding: string;
-    status: string;
-    customer_id: string;
-  }>(
-    `select id, number, due_date::text, outstanding::text, status, customer_id
-     from invoices where organization_id = $1 and deleted_at is null`,
-    [orgId],
-  );
-
+  const invoices = await listByOrg("invoices", orgId);
   const now = new Date();
   let outstanding = "0";
   let overdue = "0";
   let dueThisWeek = "0";
   const ageing = { "0-30": "0", "31-60": "0", "61-90": "0", "90+": "0" };
+  const invoiceStatusMap = new Map<string, string>();
 
   for (const invoice of invoices) {
-    const amount = moneyString(invoice.outstanding);
+    const amount = moneyString(moneyField(invoice.outstanding));
     outstanding = addMoney(outstanding, amount);
-    const overdueDays = daysOverdue(invoice.due_date, now);
+    const dueDate = asString(invoice.dueDate);
+    const status = asString(invoice.status);
+    invoiceStatusMap.set(status, addMoney(invoiceStatusMap.get(status) ?? "0", moneyField(invoice.total)));
+    const overdueDays = daysOverdue(dueDate, now);
     if (overdueDays > 0 && amount !== "0.00") {
       overdue = addMoney(overdue, amount);
       const bucket = ageingBucket(overdueDays);
       ageing[bucket] = addMoney(ageing[bucket], amount);
     } else if (amount !== "0.00") {
       ageing["0-30"] = addMoney(ageing["0-30"], amount);
-      const until = daysUntil(invoice.due_date, now);
+      const until = daysUntil(dueDate, now);
       if (until <= 7) dueThisWeek = addMoney(dueThisWeek, amount);
     }
   }
 
-  const [tenders] = await query<{ count: number }>(
-    `select count(*)::int as count from tenders
-     where organization_id = $1 and deleted_at is null and status not in ('lost','cancelled','awarded')`,
-    [orgId],
-  );
-  const [pos] = await query<{ count: number }>(
-    `select count(*)::int as count from purchase_orders
-     where organization_id = $1 and deleted_at is null and status not in ('closed','cancelled','invoiced')`,
-    [orgId],
-  );
-  const [expiring] = await query<{ count: number }>(
-    `select count(*)::int as count from company_documents
-     where organization_id = $1 and deleted_at is null and expiry_date is not null
-       and expiry_date <= (current_date + 30) and expiry_date >= current_date`,
-    [orgId],
-  );
+  const tenders = await listByOrg("tenders", orgId);
+  const pos = await listByOrg("purchase_orders", orgId);
+  const documents = await listByOrg("company_documents", orgId);
+  const opportunities = await listByOrg("opportunities", orgId);
 
-  const pipeline = await queryOne<{ value: string }>(
-    `select coalesce(sum(estimated_value),0)::text as value from opportunities
-     where organization_id = $1 and deleted_at is null and stage not in ('lost','cancelled')`,
-    [orgId],
-  );
-  const tenderPipeline = await queryOne<{ value: string }>(
-    `select coalesce(sum(tender_value),0)::text as value from tenders
-     where organization_id = $1 and deleted_at is null and status not in ('lost','cancelled')`,
-    [orgId],
-  );
-  const invoiceStatus = await query<{ status: string; total: string }>(
-    `select status, coalesce(sum(total),0)::text as total
-     from invoices where organization_id = $1 and deleted_at is null
-     group by status`,
-    [orgId],
-  );
-  const activity = await query(
-    `select id, actor_name as "actorName", summary, created_at as "createdAt"
-     from activity_events where organization_id = $1 order by created_at desc limit 8`,
-    [orgId],
-  );
-  const tasks = await query(
-    `select id, title, description, priority, due_date as "dueDate", status
-     from tasks where organization_id = $1 and deleted_at is null and status != 'complete'
-     order by case priority when 'urgent' then 0 when 'high' then 1 else 2 end, due_date asc
-     limit 8`,
-    [orgId],
-  );
-  const attention = await buildAttention(orgId, now);
+  const activeTenders = tenders.filter((row) => !["lost", "cancelled", "awarded"].includes(asString(row.status))).length;
+  const posInProgress = pos.filter((row) => !["closed", "cancelled", "invoiced"].includes(asString(row.status))).length;
+  const documentsExpiring = documents.filter((row) => {
+    if (!row.expiryDate) return false;
+    const remaining = daysUntil(asString(row.expiryDate), now);
+    return remaining >= 0 && remaining <= 30;
+  }).length;
+
+  const pipeline = opportunities
+    .filter((row) => !["lost", "cancelled"].includes(asString(row.stage)))
+    .reduce((sum, row) => addMoney(sum, moneyField(row.estimatedValue)), "0");
+  const tenderPipeline = tenders
+    .filter((row) => !["lost", "cancelled"].includes(asString(row.status)))
+    .reduce((sum, row) => addMoney(sum, moneyField(row.tenderValue)), "0");
+
+  const activityRows = await listByOrg("activity_events", orgId, {
+    orderBy: [{ field: "createdAt", direction: "desc" }],
+    limit: 8,
+  });
+  const taskRows = (await listByOrg("tasks", orgId))
+    .filter((row) => asString(row.status) !== "complete")
+    .sort((a, b) => {
+      const rank = (priority: string) => (priority === "urgent" ? 0 : priority === "high" ? 1 : 2);
+      const pr = rank(asString(a.priority)) - rank(asString(b.priority));
+      if (pr !== 0) return pr;
+      return asString(a.dueDate).localeCompare(asString(b.dueDate));
+    })
+    .slice(0, 8);
 
   return {
     kpis: {
       outstanding,
       overdue,
       dueThisWeek,
-      activeTenders: tenders?.count ?? 0,
-      posInProgress: pos?.count ?? 0,
-      documentsExpiring: expiring?.count ?? 0,
+      activeTenders,
+      posInProgress,
+      documentsExpiring,
     },
     ageing,
-    pipeline: pipeline?.value ?? "0",
-    tenderPipeline: tenderPipeline?.value ?? "0",
-    invoiceStatus,
-    activity,
-    tasks,
-    attention,
+    pipeline,
+    tenderPipeline,
+    invoiceStatus: [...invoiceStatusMap.entries()].map(([status, total]) => ({ status, total })),
+    activity: activityRows.map((row) => ({
+      id: asString(row.id),
+      actorName: asString(row.actorName),
+      summary: asString(row.summary),
+      createdAt: asString(row.createdAt),
+    })),
+    tasks: taskRows.map((row) => ({
+      id: asString(row.id),
+      title: asString(row.title),
+      description: asString(row.description),
+      priority: asString(row.priority),
+      dueDate: row.dueDate ? asString(row.dueDate) : null,
+      status: asString(row.status),
+    })),
+    attention: await buildAttention(orgId, now),
   };
 }
 
 async function buildAttention(orgId: string, now: Date) {
   const items: { title: string; href: string; tone: "danger" | "warning" | "info" }[] = [];
-  const overdueInvoices = await query<{ id: string; number: string; due_date: string; outstanding: string }>(
-    `select id, number, due_date::text, outstanding::text from invoices
-     where organization_id = $1 and deleted_at is null and outstanding::numeric > 0`,
-    [orgId],
-  );
-  for (const invoice of overdueInvoices) {
-    const days = daysOverdue(invoice.due_date, now);
+  const invoices = await listByOrg("invoices", orgId);
+  for (const invoice of invoices) {
+    if (Number(moneyField(invoice.outstanding)) <= 0) continue;
+    const days = daysOverdue(asString(invoice.dueDate), now);
     if (days > 0) {
       items.push({
-        title: `Invoice ${invoice.number} is ${days} days overdue.`,
+        title: `Invoice ${asString(invoice.number)} is ${days} days overdue.`,
         href: `/app/invoices/${invoice.id}`,
         tone: "danger",
       });
     }
   }
-  const missingGrn = await query<{ id: string; number: string }>(
-    `select po.id, po.number from purchase_orders po
-     where po.organization_id = $1 and po.deleted_at is null and po.requires_grn = true
-       and po.status in ('delivered','awaiting_grn')
-       and not exists (
-         select 1 from goods_receipts g
-         where g.purchase_order_id = po.id and g.deleted_at is null and g.status in ('signed','complete')
-       )`,
-    [orgId],
-  );
-  for (const po of missingGrn) {
-    items.push({
-      title: `GRN missing for ${po.number}.`,
-      href: `/app/purchase-orders/${po.id}`,
-      tone: "warning",
-    });
+
+  const pos = await listByOrg("purchase_orders", orgId);
+  const grns = await listByOrg("goods_receipts", orgId);
+  for (const po of pos) {
+    if (!po.requiresGrn) continue;
+    if (!["delivered", "awaiting_grn"].includes(asString(po.status))) continue;
+    const hasSigned = grns.some(
+      (grn) =>
+        grn.purchaseOrderId === po.id &&
+        !grn.deletedAt &&
+        ["signed", "complete"].includes(asString(grn.status)),
+    );
+    if (!hasSigned) {
+      items.push({
+        title: `GRN missing for ${asString(po.number)}.`,
+        href: `/app/purchase-orders/${po.id}`,
+        tone: "warning",
+      });
+    }
   }
-  const docs = await query<{ name: string; expiry_date: string }>(
-    `select name, expiry_date::text from company_documents
-     where organization_id = $1 and deleted_at is null and expiry_date is not null`,
-    [orgId],
-  );
-  for (const doc of docs) {
-    const remaining = daysUntil(doc.expiry_date, now);
+
+  const documents = await listByOrg("company_documents", orgId);
+  for (const doc of documents) {
+    if (!doc.expiryDate) continue;
+    const remaining = daysUntil(asString(doc.expiryDate), now);
     if (remaining >= 0 && remaining <= 30) {
       items.push({
-        title: `${doc.name} expires in ${remaining} days.`,
+        title: `${asString(doc.name)} expires in ${remaining} days.`,
         href: "/app/vault",
         tone: remaining <= 7 ? "danger" : "warning",
       });
     }
   }
-  const tenders = await query<{ id: string; title: string; reference: string | null; closing_at: string | null }>(
-    `select id, title, reference, closing_at::text from tenders
-     where organization_id = $1 and deleted_at is null and closing_at is not null`,
-    [orgId],
-  );
+
+  const tenders = await listByOrg("tenders", orgId);
   for (const tender of tenders) {
-    if (!tender.closing_at) continue;
-    const hours = (new Date(tender.closing_at).getTime() - now.getTime()) / 36e5;
+    if (!tender.closingAt) continue;
+    const hours = (new Date(asString(tender.closingAt)).getTime() - now.getTime()) / 36e5;
     if (hours > 0 && hours <= 48) {
       items.push({
-        title: `${tender.reference ?? tender.title} closes in ${Math.round(hours)} hours.`,
+        title: `${asString(tender.reference) || asString(tender.title)} closes in ${Math.round(hours)} hours.`,
         href: `/app/tenders/${tender.id}`,
         tone: "danger",
       });
     }
   }
-  const reqs = await query<{ tender_id: string; reference: string | null; cnt: number }>(
-    `select t.id as tender_id, t.reference, count(*)::int as cnt
-     from tender_requirements r
-     join tenders t on t.id = r.tender_id
-     where r.organization_id = $1 and r.mandatory = true and r.status not in ('complete','not_applicable')
-     group by t.id, t.reference`,
-    [orgId],
-  );
-  for (const row of reqs) {
+
+  const requirements = await listByOrg("tender_requirements", orgId, { includeDeleted: true });
+  const missingByTender = new Map<string, number>();
+  for (const req of requirements) {
+    if (!req.mandatory) continue;
+    if (["complete", "not_applicable"].includes(asString(req.status))) continue;
+    const tenderId = asString(req.tenderId);
+    missingByTender.set(tenderId, (missingByTender.get(tenderId) ?? 0) + 1);
+  }
+  for (const [tenderId, cnt] of missingByTender) {
+    const tender = tenders.find((row) => row.id === tenderId);
     items.push({
-      title: `${row.cnt} mandatory document${row.cnt === 1 ? "" : "s"} missing from Tender ${row.reference ?? ""}.`.trim(),
-      href: `/app/tenders/${row.tender_id}`,
+      title: `${cnt} mandatory document${cnt === 1 ? "" : "s"} missing from Tender ${asString(tender?.reference)}.`.trim(),
+      href: `/app/tenders/${tenderId}`,
       tone: "danger",
     });
   }
+
   return items.slice(0, 8);
 }
 
 export async function listCustomers(orgId: string) {
-  return query(
-    `select c.*, 
-      coalesce((select sum(total) from invoices i where i.customer_id = c.id and i.deleted_at is null),0)::text as "totalSales",
-      coalesce((select sum(outstanding) from invoices i where i.customer_id = c.id and i.deleted_at is null),0)::text as "outstanding"
-     from customers c
-     where c.organization_id = $1 and c.deleted_at is null
-     order by c.name`,
-    [orgId],
-  );
+  const customers = await listByOrg("customers", orgId, { orderBy: [{ field: "name", direction: "asc" }] });
+  const invoices = await listByOrg("invoices", orgId);
+  return customers.map((customer) => {
+    const related = invoices.filter((invoice) => invoice.customerId === customer.id);
+    const totalSales = related.reduce((sum, invoice) => addMoney(sum, moneyField(invoice.total)), "0");
+    const outstanding = related.reduce((sum, invoice) => addMoney(sum, moneyField(invoice.outstanding)), "0");
+    return { ...customer, totalSales, outstanding };
+  });
 }
 
 export async function getCustomer(orgId: string, id: string) {
-  return queryOne(`select * from customers where id = $1 and organization_id = $2 and deleted_at is null`, [
-    id,
-    orgId,
-  ]);
+  const { getOrgDoc } = await import("@/lib/db/repo");
+  return getOrgDoc("customers", orgId, id);
 }
 
-export async function listByOrg<T extends Record<string, unknown>>(
-  table: string,
-  orgId: string,
-  orderBy = "created_at desc",
-) {
-  return query<T>(
-    `select * from ${table} where organization_id = $1 and (deleted_at is null or deleted_at is not null) and coalesce(deleted_at, now()) = coalesce(deleted_at, now()) and (deleted_at is null) order by ${orderBy}`,
-    [orgId],
-  );
-}
+export { expiryStatus, calculateTenderReadiness };
 
 export function refreshInvoiceOutstanding(total: string, withholding: string, deductions: string, paid: string) {
   return invoiceOutstanding({
@@ -279,5 +255,3 @@ export function refreshInvoiceOutstanding(total: string, withholding: string, de
     paidAmount: paid,
   });
 }
-
-export { expiryStatus, calculateTenderReadiness };

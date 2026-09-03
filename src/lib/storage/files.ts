@@ -3,7 +3,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { ALLOWED_UPLOAD_MIME, MAX_UPLOAD_BYTES } from "@/lib/constants";
-import { query } from "@/lib/db/client";
+import { createDoc } from "@/lib/db/repo";
+import { newId } from "@/lib/db/types";
 
 const MAGIC: Array<{ mime: string; bytes: number[] }> = [
   { mime: "application/pdf", bytes: [0x25, 0x50, 0x44, 0x46] },
@@ -37,7 +38,7 @@ export async function storeFile(input: {
 }) {
   const buffer = Buffer.from(await input.file.arrayBuffer());
   const mime = validateUpload(input.file, buffer);
-  const id = crypto.randomUUID();
+  const id = newId();
   const checksum = createHash("sha256").update(buffer).digest("hex");
   const safeName = input.file.name.replace(/[^\w.\-]+/g, "_");
   const relative = `${input.organizationId}/${id}-${safeName}`;
@@ -60,10 +61,18 @@ export async function storeFile(input: {
     await fs.writeFile(path.join(process.cwd(), ".data", "uploads", relative), buffer);
   }
 
-  await query(
-    `insert into files (id, organization_id, path, file_name, mime_type, size_bytes, checksum, uploaded_by)
-     values ($1,$2,$3,$4,$5,$6,$7,$8)`,
-    [id, input.organizationId, relative, input.file.name, mime, buffer.length, checksum, input.userId],
+  await createDoc(
+    "files",
+    {
+      organizationId: input.organizationId,
+      path: relative,
+      fileName: input.file.name,
+      mimeType: mime,
+      sizeBytes: buffer.length,
+      checksum,
+      uploadedBy: input.userId,
+    },
+    id,
   );
 
   return { id, path: relative, mime, size: buffer.length, buffer, name: input.file.name };

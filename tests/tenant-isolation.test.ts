@@ -1,25 +1,48 @@
-import { describe, expect, it } from "vitest";
-import { bootstrapDatabase } from "@/lib/db/bootstrap";
-import { query } from "@/lib/db/client";
-import { DEMO } from "@/lib/db/seed";
+import path from "node:path";
+import os from "node:os";
+import { describe, expect, it, beforeAll } from "vitest";
+import { bootstrapDatabase, resetDatabaseBootstrap } from "@/lib/db/bootstrap";
+import { resetDocumentStoreCache } from "@/lib/db/firestore/client";
+import { resetLocalDocumentStore } from "@/lib/db/firestore/local-store";
+import { listByOrg, docs } from "@/lib/db/repo";
+import { DEMO } from "@/lib/db/demo";
 
 describe("tenant isolation", () => {
-  it("keeps Acme records out of the Rift Valley organization", async () => {
+  beforeAll(async () => {
+    process.env.DATABASE_DRIVER = "firestore";
+    process.env.DEMO_MODE = "true";
+    process.env.DEMO_SEED_ON_BOOT = "true";
+    process.env.FIREBASE_USE_CLOUD = "false";
+    delete process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+    delete process.env.FIRESTORE_EMULATOR_HOST;
+    process.env.FIRESTORE_LOCAL_PATH = path.join(
+      os.tmpdir(),
+      `supplieros-firestore-test-${process.pid}.json`,
+    );
+    await resetLocalDocumentStore();
+    resetDocumentStoreCache();
+    resetDatabaseBootstrap();
     await bootstrapDatabase();
-    const leaked = await query(
-      `select id from invoices where organization_id = $1 and number = 'INV-2026-0084'`,
-      [DEMO.rift],
-    );
+  });
+
+  it("keeps Acme records out of the Rift Valley organization", async () => {
+    const leaked = await listByOrg("invoices", DEMO.rift, {
+      where: [{ field: "number", op: "==", value: "INV-2026-0084" }],
+    });
     expect(leaked).toHaveLength(0);
-    const acme = await query(
-      `select id from invoices where organization_id = $1 and number = 'INV-2026-0084'`,
-      [DEMO.acme],
-    );
+
+    const acme = await listByOrg("invoices", DEMO.acme, {
+      where: [{ field: "number", op: "==", value: "INV-2026-0084" }],
+    });
     expect(acme).toHaveLength(1);
-    const riftMembers = await query(
-      `select user_id from organization_members where organization_id = $1 and user_id = $2 and status = 'active'`,
-      [DEMO.rift, DEMO.steve],
-    );
-    expect(riftMembers).toHaveLength(0);
+
+    const riftMembers = await docs("organization_members", {
+      where: [
+        { field: "organizationId", op: "==", value: DEMO.rift },
+        { field: "userId", op: "==", value: DEMO.steve },
+        { field: "status", op: "==", value: "active" },
+      ],
+    });
+    expect(riftMembers.filter((row) => !row.deletedAt)).toHaveLength(0);
   });
 });

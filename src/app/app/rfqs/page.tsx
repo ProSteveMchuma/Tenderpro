@@ -1,14 +1,18 @@
 import Link from "next/link";
-import { query } from "@/lib/db/client";
+import { listByOrg } from "@/lib/db/repo";
+import { asString } from "@/lib/db/types";
 import { requirePermission } from "@/lib/auth/session";
 import { PageHeader, StatusBadge } from "@/components/shared/chrome";
 
 export default async function RfqsPage() {
   const ctx = await requirePermission("rfqs.read");
-  const rows = await query<{ id: string; number: string; title: string; status: string; deadline: string | null }>(
-    `select id, number, title, status, deadline::text from rfqs where organization_id=$1 and deleted_at is null order by created_at desc`,
-    [ctx.membership.organizationId],
-  );
+  const rows = (await listByOrg("rfqs", ctx.membership.organizationId, { orderBy: [{ field: "createdAt", direction: "desc" }] })).map((row) => ({
+    id: asString(row.id),
+    number: asString(row.number),
+    title: asString(row.title),
+    status: asString(row.status),
+    deadline: row.deadline ? asString(row.deadline) : null,
+  }));
   return (
     <div>
       <PageHeader title="RFQs" action={<Link className="rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground" href="/app/rfqs/new">Create RFQ</Link>} />

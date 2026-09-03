@@ -1,14 +1,18 @@
 import Link from "next/link";
-import { query } from "@/lib/db/client";
+import { listByOrg } from "@/lib/db/repo";
+import { asString } from "@/lib/db/types";
 import { requirePermission } from "@/lib/auth/session";
 import { PageHeader } from "@/components/shared/chrome";
 
 export default async function SuppliersPage() {
   const ctx = await requirePermission("suppliers.read");
-  const rows = await query<{ id: string; name: string; category: string | null; rating: string | null; location: string | null }>(
-    `select id, name, category, rating::text, location from suppliers where organization_id=$1 and deleted_at is null order by name`,
-    [ctx.membership.organizationId],
-  );
+  const rows = (await listByOrg("suppliers", ctx.membership.organizationId, { orderBy: [{ field: "name", direction: "asc" }] })).map((row) => ({
+    id: asString(row.id),
+    name: asString(row.name),
+    category: row.category ? asString(row.category) : null,
+    rating: row.rating != null ? asString(row.rating) : null,
+    location: row.location ? asString(row.location) : null,
+  }));
   return (
     <div>
       <PageHeader title="Suppliers" action={<Link className="rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground" href="/app/suppliers/new">Add supplier</Link>} />

@@ -1,8 +1,10 @@
 import { cookies } from "next/headers";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import bcrypt from "bcryptjs";
-import { query, queryOne } from "@/lib/db/client";
 import { bootstrapDatabase } from "@/lib/db/bootstrap";
+import { getDatabaseDriver } from "@/lib/db/client";
+import { docs, docById, findProfileByEmail, patchDoc } from "@/lib/db/repo";
+import { asString, nowIso } from "@/lib/db/types";
 import { Role } from "@/lib/constants";
 import { Permission, assertPermission, hasPermission } from "@/lib/permissions";
 
@@ -96,7 +98,43 @@ export async function readSession(): Promise<TokenPayload | null> {
   }
 }
 
+async function getMembershipsFirestore(userId: string): Promise<Membership[]> {
+  const memberships = await docs("organization_members", {
+    where: [
+      { field: "userId", op: "==", value: userId },
+      { field: "status", op: "==", value: "active" },
+    ],
+  });
+  const active = memberships.filter((row) => !row.deletedAt);
+  const result: Membership[] = [];
+  for (const member of active) {
+    const org = await docById("organizations", asString(member.organizationId));
+    if (!org || org.deletedAt) continue;
+    const subs = await docs("subscriptions", {
+      where: [{ field: "organizationId", op: "==", value: org.id }],
+      limit: 1,
+    });
+    const sub = subs[0];
+    result.push({
+      organizationId: asString(org.id),
+      role: asString(member.role) as Role,
+      organizationName: asString(org.name),
+      currency: asString(org.currency, "KES"),
+      timezone: asString(org.timezone, "Africa/Nairobi"),
+      country: asString(org.country, "KE"),
+      vatRate: asString(org.vatRate, "16.00"),
+      onboardingCompletedAt: org.onboardingCompletedAt ? asString(org.onboardingCompletedAt) : null,
+      planId: asString(sub?.planId, "business"),
+      trialEndsAt: sub?.trialEndsAt ? asString(sub.trialEndsAt) : null,
+      subscriptionStatus: sub?.status ? asString(sub.status) : null,
+    });
+  }
+  return result.sort((a, b) => a.organizationName.localeCompare(b.organizationName));
+}
+
 export async function getMemberships(userId: string): Promise<Membership[]> {
+  if (getDatabaseDriver() === "firestore") return getMembershipsFirestore(userId);
+  const { query } = await import("@/lib/db/client");
   return query<Membership>(
     `select m.organization_id as "organizationId",
             m.role,
@@ -122,6 +160,25 @@ export async function getAuthContext(): Promise<AuthContext | null> {
   await bootstrapDatabase();
   const session = await readSession();
   if (!session) return null;
+
+  if (getDatabaseDriver() === "firestore") {
+    const profile = await docById("profiles", session.userId);
+    if (!profile || profile.deletedAt) return null;
+    const user: SessionUser = {
+      id: asString(profile.id),
+      email: asString(profile.email),
+      fullName: asString(profile.fullName),
+      phone: profile.phone ? asString(profile.phone) : null,
+      country: asString(profile.country, "KE"),
+    };
+    const memberships = await getMemberships(user.id);
+    const membership =
+      memberships.find((item) => item.organizationId === session.organizationId) ?? memberships[0];
+    if (!membership) return null;
+    return { user, membership, memberships };
+  }
+
+  const { queryOne } = await import("@/lib/db/client");
   const user = await queryOne<SessionUser>(
     `select id, email, full_name as "fullName", phone, country
      from profiles where id = $1 and deleted_at is null`,
@@ -156,6 +213,23 @@ export function can(ctx: AuthContext, permission: Permission) {
 }
 
 export async function verifyPassword(email: string, password: string) {
+  if (getDatabaseDriver() === "firestore") {
+    const profile = await findProfileByEmail(email);
+    if (!profile?.passwordHash) return null;
+    const ok = await bcrypt.compare(password, asString(profile.passwordHash));
+    if (!ok) return null;
+    await patchDoc("profiles", asString(profile.id), { lastSignInAt: nowIso() });
+    return {
+      id: asString(profile.id),
+      email: asString(profile.email),
+      fullName: asString(profile.fullName),
+      phone: profile.phone ? asString(profile.phone) : null,
+      country: asString(profile.country, "KE"),
+      passwordHash: asString(profile.passwordHash),
+    };
+  }
+
+  const { query, queryOne } = await import("@/lib/db/client");
   const user = await queryOne<SessionUser & { passwordHash: string | null }>(
     `select id, email, full_name as "fullName", phone, country, password_hash as "passwordHash"
      from profiles where lower(email) = lower($1) and deleted_at is null`,

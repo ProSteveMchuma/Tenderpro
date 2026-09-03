@@ -4,6 +4,7 @@ const nextConfig: NextConfig = {
   serverExternalPackages: [
     "@electric-sql/pglite",
     "postgres",
+    "firebase-admin",
     "mammoth",
     "exceljs",
     "unpdf",

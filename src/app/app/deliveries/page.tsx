@@ -1,22 +1,29 @@
 import Link from "next/link";
-import { query } from "@/lib/db/client";
+import { listByOrg } from "@/lib/db/repo";
+import { asString } from "@/lib/db/types";
 import { requirePermission } from "@/lib/auth/session";
 import { PageHeader, StatusBadge } from "@/components/shared/chrome";
 
 export default async function DeliveriesPage() {
   const ctx = await requirePermission("deliveries.read");
-  const rows = await query(
-    `select d.id, d.number, d.status, d.delivery_date::text, c.name as customer, po.number as po
-     from deliveries d
-     left join customers c on c.id=d.customer_id
-     left join purchase_orders po on po.id=d.purchase_order_id
-     where d.organization_id=$1 and d.deleted_at is null order by d.created_at desc`,
-    [ctx.membership.organizationId],
-  );
+  const orgId = ctx.membership.organizationId;
+  const deliveries = await listByOrg("deliveries", orgId, { orderBy: [{ field: "createdAt", direction: "desc" }] });
+  const customers = await listByOrg("customers", orgId);
+  const pos = await listByOrg("purchase_orders", orgId);
+  const customerById = new Map(customers.map((row) => [asString(row.id), asString(row.name)]));
+  const poById = new Map(pos.map((row) => [asString(row.id), asString(row.number)]));
+  const rows = deliveries.map((row) => ({
+    id: asString(row.id),
+    number: asString(row.number),
+    status: asString(row.status),
+    customer: customerById.get(asString(row.customerId)) ?? "",
+    po: poById.get(asString(row.purchaseOrderId)) ?? "",
+    delivery_date: asString(row.deliveryDate),
+  }));
   return (
     <div>
       <PageHeader title="Deliveries" action={<Link className="rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground" href="/app/deliveries/new">Record delivery</Link>} />
-      <SimpleTable rows={rows as Record<string, string>[]} columns={["number", "customer", "po", "delivery_date", "status"]} />
+      <SimpleTable rows={rows} columns={["number", "customer", "po", "delivery_date", "status"]} />
     </div>
   );
 }

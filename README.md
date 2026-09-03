@@ -15,7 +15,8 @@ The product metric that matters is **money collected**.
 - Next.js 16 (App Router), React 19, TypeScript
 - Tailwind CSS 4 and shadcn/ui
 - **Firebase Firestore** as the default database (`DATABASE_DRIVER=firestore`)
-- Local file-backed Firestore store (`.data/firestore/db.json`) when no cloud credentials are set
+- Firebase project: **tenderpro-480721** (`src/lib/firebase/config.ts`)
+- Local file-backed Firestore store (`.data/firestore/db.json`) when no Admin service account is set
 - Cloud Firestore via `firebase-admin` when `FIREBASE_SERVICE_ACCOUNT_JSON` or the emulator is configured
 - Signed httpOnly sessions (`sos_session`); Firebase Auth is not required
 - Local `.data/uploads` in demo mode (optional Supabase Storage)
@@ -64,8 +65,8 @@ See `.env.example`. Never commit `.env`.
 Required in production:
 
 - `DATABASE_DRIVER=firestore`
-- `FIREBASE_PROJECT_ID`
-- `FIREBASE_SERVICE_ACCOUNT_JSON` (Firebase Admin service account, server only)
+- `FIREBASE_PROJECT_ID=tenderpro-480721` (and the `NEXT_PUBLIC_FIREBASE_*` web config)
+- `FIREBASE_SERVICE_ACCOUNT_JSON` (Firebase Admin service account, server only — required to write to Cloud Firestore)
 - `SESSION_SECRET`
 - `AI_PROVIDER` / `AI_MODEL` / `OPENAI_API_KEY` when live extraction is needed
 
@@ -82,14 +83,17 @@ Collections are flat (one collection per entity: `profiles`, `organizations`, `i
 
 Access the database through `src/lib/db/repo.ts` (`listByOrg`, `getOrgDoc`, `createDoc`, `patchDoc`). Tenant isolation is enforced by always querying with the authenticated `organizationId`.
 
-Connect a real Firebase project:
+Connect this Firebase project (`tenderpro-480721`):
 
-1. Create a Firebase project and enable Firestore.
-2. Create a service account and paste the JSON into `FIREBASE_SERVICE_ACCOUNT_JSON`.
-3. Deploy rules and indexes:
+The web app config lives in `src/lib/firebase/config.ts` and `.env.example`. That config is public. To have the **server** write into Cloud Firestore:
+
+1. Firebase Console → Project settings → Service accounts → Generate new private key.
+2. Paste the JSON into `FIREBASE_SERVICE_ACCOUNT_JSON` (Vercel / `.env`, never the browser).
+3. Set `FIREBASE_USE_CLOUD=true`.
+4. Deploy rules and indexes:
 
 ```bash
-npx firebase-tools deploy --only firestore
+npx firebase-tools deploy --only firestore --project tenderpro-480721
 ```
 
 Or run the emulator:
@@ -126,7 +130,7 @@ Critical coverage includes money math, invoice balances, payment allocation, due
 
 ## Production deployment (Vercel + Firebase)
 
-1. Create a Firebase project and a Cloud Firestore database (choose a region close to your users).
+1. This repo is already pointed at Firebase project `tenderpro-480721`.
 2. Generate a service account JSON and set `FIREBASE_PROJECT_ID` plus `FIREBASE_SERVICE_ACCOUNT_JSON` in Vercel. Never expose the service account to the browser.
 3. Deploy `firestore.rules` and `firestore.indexes.json`.
 4. Deploy this repository. Framework is Next.js (`vercel.json`).

@@ -2,6 +2,7 @@ import "server-only";
 import { DocumentStore, resolveDriver } from "@/lib/db/types";
 import { createLocalDocumentStore } from "@/lib/db/firestore/local-store";
 import { createFirebaseDocumentStore } from "@/lib/db/firestore/admin";
+import { getFirebaseProjectId } from "@/lib/firebase/config";
 
 type GlobalStore = {
   store?: DocumentStore;
@@ -14,9 +15,9 @@ const globalForStore = globalThis as typeof globalThis & { __supplierosDocStore?
 export function firestoreMode(): "local" | "cloud" {
   if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) return "cloud";
   if (process.env.FIRESTORE_EMULATOR_HOST) return "cloud";
-  if (process.env.FIREBASE_PROJECT_ID && process.env.GOOGLE_APPLICATION_CREDENTIALS) return "cloud";
+  if (getFirebaseProjectId() && process.env.GOOGLE_APPLICATION_CREDENTIALS) return "cloud";
   // Explicit cloud request without credentials still falls back to local demo store.
-  if (process.env.FIREBASE_USE_CLOUD === "true" && process.env.FIREBASE_PROJECT_ID) return "cloud";
+  if (process.env.FIREBASE_USE_CLOUD === "true" && getFirebaseProjectId()) return "cloud";
   return "local";
 }
 

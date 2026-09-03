@@ -3,6 +3,7 @@ import path from "node:path";
 import { getDatabaseDriver, getSql } from "@/lib/db/client";
 import { seedDemoData } from "@/lib/db/seed";
 import { getDocumentStore, getFirestoreBackend } from "@/lib/db/firestore/client";
+import { getFirebaseProjectId } from "@/lib/firebase/config";
 
 let bootPromise: Promise<void> | null = null;
 
@@ -20,7 +21,9 @@ async function runBootstrap() {
   if (driver === "firestore") {
     await getDocumentStore();
     const backend = await getFirestoreBackend();
-    console.info(`[supplieros] database driver=firestore backend=${backend}`);
+    console.info(
+      `[supplieros] database driver=firestore backend=${backend} project=${getFirebaseProjectId()}`,
+    );
   } else {
     const sql = await getSql();
     const schemaPath = path.join(process.cwd(), "supabase/migrations/20260903_init.sql");

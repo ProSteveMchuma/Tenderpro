@@ -30,6 +30,7 @@
     "decimal.js": "^10.6.0",
     "drizzle-orm": "^0.45.2",
     "exceljs": "^4.4.0",
+    "firebase": "^12.18.0",
     "firebase-admin": "^14.3.0",
     "lucide-react": "^1.40.0",
     "mammoth": "^1.12.2",

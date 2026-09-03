@@ -97,7 +97,13 @@ export function sortDocs(docs: DbDoc[], orderBy: QueryOptions["orderBy"] = []) {
 export function resolveDriver(): DbDriver {
   const explicit = process.env.DATABASE_DRIVER as DbDriver | undefined;
   if (explicit === "firestore" || explicit === "postgres" || explicit === "pglite") return explicit;
-  if (process.env.FIREBASE_PROJECT_ID || process.env.FIREBASE_SERVICE_ACCOUNT_JSON) return "firestore";
+  if (
+    process.env.FIREBASE_PROJECT_ID ||
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
+    process.env.FIREBASE_SERVICE_ACCOUNT_JSON
+  ) {
+    return "firestore";
+  }
   if (process.env.DATABASE_URL) return "postgres";
   // Default to Firestore local document store for this Firebase migration.
   return "firestore";

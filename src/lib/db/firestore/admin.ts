@@ -6,6 +6,7 @@ import {
   matchesWhere,
   sortDocs,
 } from "@/lib/db/types";
+import { getFirebaseProjectId } from "@/lib/firebase/config";
 
 type GlobalFirebase = {
   app?: import("firebase-admin/app").App;
@@ -34,7 +35,7 @@ export async function createFirebaseDocumentStore(): Promise<DocumentStore> {
   const { cert, getApps, initializeApp } = await import("firebase-admin/app");
   const { getFirestore } = await import("firebase-admin/firestore");
 
-  const projectId = process.env.FIREBASE_PROJECT_ID || readServiceAccount()?.project_id;
+  const projectId = getFirebaseProjectId() || readServiceAccount()?.project_id;
   if (!projectId) {
     throw new Error("FIREBASE_PROJECT_ID or FIREBASE_SERVICE_ACCOUNT_JSON is required for cloud Firestore.");
   }

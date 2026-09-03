@@ -1,0 +1,1 @@
+-- Configure in supabase/config.toml when using the CLI.

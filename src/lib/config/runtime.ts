@@ -2,6 +2,10 @@ export function isProduction() {
   return process.env.NODE_ENV === "production";
 }
 
+export function isNextBuildPhase() {
+  return process.env.NEXT_PHASE === "phase-production-build";
+}
+
 export function isDemoMode() {
   if (process.env.DEMO_MODE === "true") return true;
   if (process.env.DEMO_MODE === "false") return false;
@@ -21,7 +25,7 @@ export function sessionSecret() {
 }
 
 export function assertProductionConfig() {
-  if (!isProduction()) return;
+  if (!isProduction() || isNextBuildPhase()) return;
   sessionSecret();
   if (process.env.DATABASE_DRIVER === "firestore" || !process.env.DATABASE_DRIVER) {
     if (!process.env.FIREBASE_SERVICE_ACCOUNT_JSON && !process.env.FIREBASE_SERVICE_ACCOUNT_PATH) {

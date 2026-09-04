@@ -4,11 +4,12 @@ import { getDatabaseDriver, getSql } from "@/lib/db/client";
 import { seedDemoData } from "@/lib/db/seed";
 import { getDocumentStore, getFirestoreBackend } from "@/lib/db/firestore/client";
 import { getFirebaseProjectId, getFirestoreDatabaseId } from "@/lib/firebase/config";
-import { assertProductionConfig, isDemoMode } from "@/lib/config/runtime";
+import { assertProductionConfig, isDemoMode, isNextBuildPhase } from "@/lib/config/runtime";
 
 let bootPromise: Promise<void> | null = null;
 
 export async function bootstrapDatabase() {
+  if (isNextBuildPhase()) return;
   if (!bootPromise) bootPromise = runBootstrap();
   await bootPromise;
 }

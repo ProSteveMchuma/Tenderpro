@@ -5,8 +5,10 @@ import { bootstrapDatabase } from "@/lib/db/bootstrap";
 import { getDatabaseDriver } from "@/lib/db/client";
 import { docs, docById, findProfileByEmail, patchDoc } from "@/lib/db/repo";
 import { asString, nowIso } from "@/lib/db/types";
-import { Role } from "@/lib/constants";
+import { sessionSecret } from "@/lib/config/runtime";
+import type { Role } from "@/lib/constants";
 import { Permission, assertPermission, hasPermission } from "@/lib/permissions";
+import { assertSubscriptionAllowsWrites } from "@/lib/auth/subscription";
 
 const COOKIE = "sos_session";
 
@@ -16,6 +18,7 @@ export type SessionUser = {
   fullName: string;
   phone: string | null;
   country: string;
+  emailVerifiedAt: string | null;
 };
 
 export type Membership = {
@@ -45,7 +48,7 @@ type TokenPayload = {
 };
 
 function secret() {
-  return process.env.SESSION_SECRET || "dev-only-change-me";
+  return sessionSecret();
 }
 
 function sign(payload: TokenPayload) {
@@ -170,6 +173,7 @@ export async function getAuthContext(): Promise<AuthContext | null> {
       fullName: asString(profile.fullName),
       phone: profile.phone ? asString(profile.phone) : null,
       country: asString(profile.country, "KE"),
+      emailVerifiedAt: profile.emailVerifiedAt ? asString(profile.emailVerifiedAt) : null,
     };
     const memberships = await getMemberships(user.id);
     const membership =
@@ -180,7 +184,7 @@ export async function getAuthContext(): Promise<AuthContext | null> {
 
   const { queryOne } = await import("@/lib/db/client");
   const user = await queryOne<SessionUser>(
-    `select id, email, full_name as "fullName", phone, country
+    `select id, email, full_name as "fullName", phone, country, email_verified_at as "emailVerifiedAt"
      from profiles where id = $1 and deleted_at is null`,
     [session.userId],
   );
@@ -208,6 +212,12 @@ export async function requirePermission(permission: Permission): Promise<AuthCon
   return ctx;
 }
 
+export async function requireWrite(permission: Permission): Promise<AuthContext> {
+  const ctx = await requirePermission(permission);
+  assertSubscriptionAllowsWrites(ctx);
+  return ctx;
+}
+
 export function can(ctx: AuthContext, permission: Permission) {
   return hasPermission(ctx.membership.role, permission);
 }
@@ -225,13 +235,15 @@ export async function verifyPassword(email: string, password: string) {
       fullName: asString(profile.fullName),
       phone: profile.phone ? asString(profile.phone) : null,
       country: asString(profile.country, "KE"),
+      emailVerifiedAt: profile.emailVerifiedAt ? asString(profile.emailVerifiedAt) : null,
       passwordHash: asString(profile.passwordHash),
     };
   }
 
   const { query, queryOne } = await import("@/lib/db/client");
   const user = await queryOne<SessionUser & { passwordHash: string | null }>(
-    `select id, email, full_name as "fullName", phone, country, password_hash as "passwordHash"
+    `select id, email, full_name as "fullName", phone, country, password_hash as "passwordHash",
+            email_verified_at as "emailVerifiedAt"
      from profiles where lower(email) = lower($1) and deleted_at is null`,
     [email],
   );

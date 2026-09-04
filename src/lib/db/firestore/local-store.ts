@@ -88,6 +88,15 @@ export function createLocalDocumentStore(): DocumentStore {
       if (options.limit != null) docs = docs.slice(0, options.limit);
       return docs;
     },
+    async increment(collection, id, field, extra = {}) {
+      const store = await loadStore();
+      if (!store[collection]) store[collection] = {};
+      const current = store[collection][id];
+      const value = Number(current?.[field] ?? 1);
+      store[collection][id] = { ...current, ...extra, id, [field]: value + 1 } as DbDoc;
+      await persist(store);
+      return value;
+    },
   };
 }
 

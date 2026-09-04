@@ -5,6 +5,8 @@ import { createHash } from "node:crypto";
 import { ALLOWED_UPLOAD_MIME, MAX_UPLOAD_BYTES } from "@/lib/constants";
 import { createDoc } from "@/lib/db/repo";
 import { newId } from "@/lib/db/types";
+import { firebaseWebConfig } from "@/lib/firebase/config";
+import { isProduction } from "@/lib/config/runtime";
 
 const MAGIC: Array<{ mime: string; bytes: number[] }> = [
   { mime: "application/pdf", bytes: [0x25, 0x50, 0x44, 0x46] },
@@ -31,6 +33,15 @@ export function validateUpload(file: File, buffer: Buffer) {
   return mime;
 }
 
+function storageDriver() {
+  if (process.env.STORAGE_DRIVER) return process.env.STORAGE_DRIVER;
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON || process.env.FIREBASE_SERVICE_ACCOUNT_PATH) {
+    return "firebase";
+  }
+  if (process.env.NEXT_PUBLIC_SUPABASE_URL) return "supabase";
+  return "local";
+}
+
 export async function storeFile(input: {
   organizationId: string;
   userId: string;
@@ -42,8 +53,20 @@ export async function storeFile(input: {
   const checksum = createHash("sha256").update(buffer).digest("hex");
   const safeName = input.file.name.replace(/[^\w.\-]+/g, "_");
   const relative = `${input.organizationId}/${id}-${safeName}`;
+  const driver = storageDriver();
 
-  if (process.env.STORAGE_DRIVER === "supabase" && process.env.NEXT_PUBLIC_SUPABASE_URL) {
+  if (driver === "firebase") {
+    const { getFirebaseAdminApp } = await import("@/lib/firebase/admin-app");
+    const { getStorage } = await import("firebase-admin/storage");
+    const app = await getFirebaseAdminApp();
+    const bucket = getStorage(app).bucket(firebaseWebConfig.storageBucket);
+    const file = bucket.file(relative);
+    await file.save(buffer, {
+      contentType: mime,
+      resumable: false,
+      metadata: { cacheControl: "private, max-age=0" },
+    });
+  } else if (driver === "supabase" && process.env.NEXT_PUBLIC_SUPABASE_URL) {
     const { createClient } = await import("@supabase/supabase-js");
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -56,6 +79,9 @@ export async function storeFile(input: {
     });
     if (error) throw new Error(error.message);
   } else {
+    if (isProduction()) {
+      throw new Error("Local file storage is not allowed in production. Set STORAGE_DRIVER=firebase.");
+    }
     const dir = path.join(process.cwd(), ".data", "uploads", input.organizationId);
     await fs.mkdir(dir, { recursive: true });
     await fs.writeFile(path.join(process.cwd(), ".data", "uploads", relative), buffer);
@@ -70,14 +96,24 @@ export async function storeFile(input: {
       mimeType: mime,
       sizeBytes: buffer.length,
       checksum,
+      driver,
       uploadedBy: input.userId,
     },
     id,
   );
 
-  return { id, path: relative, mime, size: buffer.length, buffer, name: input.file.name };
+  return { id, path: relative, mime, size: buffer.length, buffer, name: input.file.name, driver };
 }
 
 export async function readStoredFile(relativePath: string) {
+  const driver = storageDriver();
+  if (driver === "firebase") {
+    const { getFirebaseAdminApp } = await import("@/lib/firebase/admin-app");
+    const { getStorage } = await import("firebase-admin/storage");
+    const app = await getFirebaseAdminApp();
+    const bucket = getStorage(app).bucket(firebaseWebConfig.storageBucket);
+    const [buffer] = await bucket.file(relativePath).download();
+    return buffer;
+  }
   return fs.readFile(path.join(process.cwd(), ".data", "uploads", relativePath));
 }

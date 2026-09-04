@@ -24,6 +24,12 @@ export interface DocumentStore {
   update(collection: string, id: string, data: Record<string, unknown>): Promise<void>;
   delete(collection: string, id: string): Promise<void>;
   query(collection: string, options?: QueryOptions): Promise<DbDoc[]>;
+  increment(
+    collection: string,
+    id: string,
+    field: string,
+    extra?: Record<string, unknown>,
+  ): Promise<number>;
 }
 
 export function newId() {

@@ -11,7 +11,7 @@ export default function ForgotPasswordPage() {
     <AuthCard title="Forgot password" subtitle="If the account exists, we’ll send a reset link. In development this is printed to the server log.">
       <form action={action}>
         <Field label="Email" name="email" type="email" required />
-        <Button type="submit" nativeButton className="w-full">
+        <Button type="submit" className="w-full">
           Send reset link
         </Button>
       </form>

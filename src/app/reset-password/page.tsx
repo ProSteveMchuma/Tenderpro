@@ -17,7 +17,7 @@ function ResetForm() {
         <Field label="New password" name="password" type="password" required />
         {state?.error ? <p className="mb-2 text-sm text-destructive">{state.error}</p> : null}
         {state?.ok ? <p className="mb-2 text-sm text-emerald-700">Password updated. You can sign in.</p> : null}
-        <Button type="submit" nativeButton className="w-full">
+        <Button type="submit" className="w-full">
           Update password
         </Button>
       </form>

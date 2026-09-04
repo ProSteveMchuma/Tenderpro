@@ -103,14 +103,9 @@ export function camelizeInvoice(row: DbDoc) {
 export async function nextSequence(organizationId: string, kind: string, prefix: string) {
   const store = await getDocumentStore();
   const id = `${organizationId}:${kind}`;
-  const current = await store.get("sequences", id);
-  const next = Number(current?.nextNumber ?? 1);
-  await store.set("sequences", id, {
-    id,
+  const next = await store.increment("sequences", id, "nextNumber", {
     organizationId,
     kind,
-    nextNumber: next + 1,
-    updatedAt: nowIso(),
   });
   return `${prefix}-${new Date().getFullYear()}-${String(next).padStart(4, "0")}`;
 }

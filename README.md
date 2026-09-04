@@ -19,7 +19,8 @@ The product metric that matters is **money collected**.
 - Local file-backed Firestore store (`.data/firestore/db.json`) when no Admin service account is set
 - Cloud Firestore via `firebase-admin` when `FIREBASE_SERVICE_ACCOUNT_JSON` or the emulator is configured
 - Signed httpOnly sessions (`sos_session`); Firebase Auth is not required
-- Local `.data/uploads` in demo mode (optional Supabase Storage)
+- Firebase Storage for uploads when a service account is configured (local `.data/uploads` in development only)
+- Paystack checkout + webhook for subscriptions (`/api/billing/paystack/webhook`)
 - AI provider abstraction (`AI_PROVIDER`, `AI_MODEL`) with OpenAI and a schema-validated mock
 - Vitest for business-critical tests
 
@@ -32,7 +33,7 @@ The product metric that matters is **money collected**.
 - **Tender deadlines:** stored as local date + time + timezone, plus a computed UTC timestamp.
 - **AI:** capability functions (`analyzeTender`, `extractPurchaseOrder`, …) with Zod validation. Untrusted document text cannot override system instructions.
 - **Notifications:** in-app immediately; email (Resend or console) and WhatsApp (mock) adapters are ready.
-- **Billing:** development provider ships with the MVP. Paystack and M-Pesa can be added behind the same interface.
+- **Billing:** Paystack in production (`PAYSTACK_SECRET_KEY`). Development billing simulates plan switches locally.
 
 ## Local setup
 
@@ -66,8 +67,14 @@ Required in production:
 
 - `DATABASE_DRIVER=firestore`
 - `FIREBASE_PROJECT_ID=tenderpro-480721` (and the `NEXT_PUBLIC_FIREBASE_*` web config)
+- `FIRESTORE_DATABASE=tenderpro`
 - `FIREBASE_SERVICE_ACCOUNT_JSON` (Firebase Admin service account, server only — required to write to Cloud Firestore)
-- `SESSION_SECRET`
+- `STORAGE_DRIVER=firebase`
+- `SESSION_SECRET` (long random value, not the example placeholder)
+- `NEXT_PUBLIC_APP_URL` (public origin, no trailing slash)
+- `PAYSTACK_SECRET_KEY` (and optionally `PAYSTACK_WEBHOOK_SECRET`)
+- `DEMO_MODE=false` (unless you intentionally want seeded demo data)
+- `EMAIL_PROVIDER=resend` and `RESEND_API_KEY` so verification and invite emails actually send
 - `AI_PROVIDER` / `AI_MODEL` / `OPENAI_API_KEY` when live extraction is needed
 
 ## Database (Firebase Firestore)
@@ -132,11 +139,14 @@ Critical coverage includes money math, invoice balances, payment allocation, due
 
 1. This repo is already pointed at Firebase project `tenderpro-480721`.
 2. Generate a service account JSON and set `FIREBASE_PROJECT_ID` plus `FIREBASE_SERVICE_ACCOUNT_JSON` in Vercel. Never expose the service account to the browser.
-3. Deploy `firestore.rules` and `firestore.indexes.json`.
-4. Deploy this repository. Framework is Next.js (`vercel.json`).
-5. Point `NEXT_PUBLIC_APP_URL` at the production domain.
-6. Switch `DEMO_MODE=false` once you no longer want auto-seeded demo data.
-7. Configure Resend, OpenAI and a billing provider when ready. The app runs without them.
+3. Set `FIRESTORE_DATABASE=tenderpro`. This project has no `(default)` native Firestore database.
+4. Deploy `firestore.rules`, `firestore.indexes.json` and `storage.rules`.
+5. Deploy this repository. Framework is Next.js (`vercel.json`).
+6. Point `NEXT_PUBLIC_APP_URL` at the production domain.
+7. Set `DEMO_MODE=false` so production does not seed demo tenants or show demo passwords.
+8. Configure Paystack: `PAYSTACK_SECRET_KEY`, webhook `https://<domain>/api/billing/paystack/webhook`.
+9. Configure Resend (`EMAIL_PROVIDER=resend`) so email verification and invites leave the server.
+10. Configure OpenAI when live extraction is needed. The app can run with `AI_PROVIDER=mock`.
 
 ## Security notes
 

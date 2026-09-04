@@ -4,6 +4,7 @@ import { getDatabaseDriver, getSql } from "@/lib/db/client";
 import { seedDemoData } from "@/lib/db/seed";
 import { getDocumentStore, getFirestoreBackend } from "@/lib/db/firestore/client";
 import { getFirebaseProjectId, getFirestoreDatabaseId } from "@/lib/firebase/config";
+import { assertProductionConfig, isDemoMode } from "@/lib/config/runtime";
 
 let bootPromise: Promise<void> | null = null;
 
@@ -17,6 +18,7 @@ export function resetDatabaseBootstrap() {
 }
 
 async function runBootstrap() {
+  assertProductionConfig();
   const driver = getDatabaseDriver();
   if (driver === "firestore") {
     await getDocumentStore();
@@ -41,9 +43,7 @@ async function runBootstrap() {
     console.info(`[supplieros] database driver=${sql.dialect}`);
   }
 
-  const demo = process.env.DEMO_MODE !== "false";
-  const seedOnBoot = process.env.DEMO_SEED_ON_BOOT !== "false";
-  if (demo && seedOnBoot) {
+  if (isDemoMode() && process.env.DEMO_SEED_ON_BOOT !== "false") {
     await seedDemoData();
   }
 }

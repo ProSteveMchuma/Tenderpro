@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireAuth, requirePermission } from "@/lib/auth/session";
+import { requireAuth, requirePermission, requireWrite } from "@/lib/auth/session";
 import {
   createDoc,
   docById,
@@ -24,6 +24,9 @@ import { calculateTenderReadiness, matchRequirementToVault } from "@/lib/domain/
 import { scoreQuotations } from "@/lib/domain/quotation-score";
 import { assertEntitlement } from "@/lib/entitlements";
 import { analyzeTenderSchema } from "@/lib/ai/schemas";
+import { hashToken, randomToken } from "@/lib/auth/tokens";
+import { getEmailProvider } from "@/lib/email";
+import { appUrl } from "@/lib/config/runtime";
 
 function fd(formData: FormData, key: string) {
   return String(formData.get(key) || "").trim();
@@ -65,7 +68,7 @@ async function consumeAiAnalysis(organizationId: string, planId: string) {
 }
 
 export async function createCustomerAction(formData: FormData) {
-  const ctx = await requirePermission("customers.write");
+  const ctx = await requireWrite("customers.write");
   const orgId = ctx.membership.organizationId;
   const existing = await listByOrg("customers", orgId);
   assertEntitlement(ctx.membership.planId, "clients", existing.length);
@@ -99,7 +102,7 @@ export async function createCustomerAction(formData: FormData) {
 }
 
 export async function createOpportunityAction(formData: FormData) {
-  const ctx = await requirePermission("opportunities.write");
+  const ctx = await requireWrite("opportunities.write");
   const id = newId();
   await createDoc(
     "opportunities",
@@ -129,7 +132,7 @@ export async function createOpportunityAction(formData: FormData) {
 }
 
 export async function updateOpportunityStageAction(formData: FormData) {
-  const ctx = await requirePermission("opportunities.write");
+  const ctx = await requireWrite("opportunities.write");
   const id = fd(formData, "id");
   const row = await getOrgDoc("opportunities", ctx.membership.organizationId, id);
   if (row) {
@@ -139,7 +142,7 @@ export async function updateOpportunityStageAction(formData: FormData) {
 }
 
 export async function createTenderAction(formData: FormData) {
-  const ctx = await requirePermission("tenders.write");
+  const ctx = await requireWrite("tenders.write");
   const orgId = ctx.membership.organizationId;
   const tenders = await listByOrg("tenders", orgId);
   const active = tenders.filter((row) => !["lost", "cancelled"].includes(asString(row.status))).length;
@@ -292,7 +295,7 @@ async function analyzeTenderDocument(
 }
 
 export async function rerunTenderAnalysisAction(formData: FormData) {
-  const ctx = await requirePermission("tenders.write");
+  const ctx = await requireWrite("tenders.write");
   const tenderId = fd(formData, "tenderId");
   const tender = await getOrgDoc("tenders", ctx.membership.organizationId, tenderId);
   const extracted = asString(tender?.extractedText);
@@ -303,7 +306,7 @@ export async function rerunTenderAnalysisAction(formData: FormData) {
 }
 
 export async function runBidAuditAction(formData: FormData) {
-  const ctx = await requirePermission("tenders.write");
+  const ctx = await requireWrite("tenders.write");
   const tenderId = fd(formData, "tenderId");
   const orgId = ctx.membership.organizationId;
   const tender = await getOrgDoc("tenders", orgId, tenderId);
@@ -327,7 +330,7 @@ export async function runBidAuditAction(formData: FormData) {
 }
 
 export async function uploadVaultDocumentAction(formData: FormData) {
-  const ctx = await requirePermission("vault.write");
+  const ctx = await requireWrite("vault.write");
   const file = formData.get("file");
   let fileId: string | null = null;
   let meta = {
@@ -387,7 +390,7 @@ export async function uploadVaultDocumentAction(formData: FormData) {
 }
 
 export async function createPurchaseOrderAction(formData: FormData) {
-  const ctx = await requirePermission("purchase_orders.write");
+  const ctx = await requireWrite("purchase_orders.write");
   const file = formData.get("file");
   let extracted: Record<string, unknown> | null = null;
   let fileId: string | null = null;
@@ -454,7 +457,7 @@ export async function createPurchaseOrderAction(formData: FormData) {
 }
 
 export async function createDeliveryAction(formData: FormData) {
-  const ctx = await requirePermission("deliveries.write");
+  const ctx = await requireWrite("deliveries.write");
   const id = newId();
   const number = fd(formData, "number") || (await nextNumber(ctx.membership.organizationId, "dn", "DN"));
   const purchaseOrderId = orNull(fd(formData, "purchaseOrderId"));
@@ -493,7 +496,7 @@ export async function createDeliveryAction(formData: FormData) {
 }
 
 export async function createGrnAction(formData: FormData) {
-  const ctx = await requirePermission("grns.write");
+  const ctx = await requireWrite("grns.write");
   const id = newId();
   const number = fd(formData, "number") || (await nextNumber(ctx.membership.organizationId, "grn", "GRN"));
   let fileId: string | null = null;
@@ -535,7 +538,7 @@ export async function createGrnAction(formData: FormData) {
 }
 
 export async function createInvoiceAction(formData: FormData) {
-  const ctx = await requirePermission("invoices.write");
+  const ctx = await requireWrite("invoices.write");
   const orgId = ctx.membership.organizationId;
   const poId = fd(formData, "purchaseOrderId");
   if (poId) {
@@ -607,7 +610,7 @@ export async function createInvoiceAction(formData: FormData) {
 }
 
 export async function recordPaymentAction(formData: FormData) {
-  const ctx = await requirePermission("payments.write");
+  const ctx = await requireWrite("payments.write");
   const orgId = ctx.membership.organizationId;
   const invoiceId = fd(formData, "invoiceId");
   const invoice = await getOrgDoc("invoices", orgId, invoiceId);
@@ -664,7 +667,7 @@ export async function recordPaymentAction(formData: FormData) {
 }
 
 export async function createFollowupAction(formData: FormData) {
-  const ctx = await requirePermission("receivables.write");
+  const ctx = await requireWrite("receivables.write");
   const invoiceId = fd(formData, "invoiceId");
   const invoice = await getOrgDoc("invoices", ctx.membership.organizationId, invoiceId);
   if (!invoice) throw new Error("Invoice not found.");
@@ -691,7 +694,7 @@ export async function createFollowupAction(formData: FormData) {
 }
 
 export async function generateFollowupAction(formData: FormData) {
-  const ctx = await requirePermission("ai.use");
+  const ctx = await requireWrite("ai.use");
   const invoiceId = fd(formData, "invoiceId");
   const orgId = ctx.membership.organizationId;
   const invoice = await getOrgDoc("invoices", orgId, invoiceId);
@@ -725,7 +728,7 @@ export async function generateFollowupAction(formData: FormData) {
 }
 
 export async function createSupplierAction(formData: FormData) {
-  const ctx = await requirePermission("suppliers.write");
+  const ctx = await requireWrite("suppliers.write");
   const id = newId();
   await createDoc(
     "suppliers",
@@ -751,7 +754,7 @@ export async function createSupplierAction(formData: FormData) {
 }
 
 export async function createRfqAction(formData: FormData) {
-  const ctx = await requirePermission("rfqs.write");
+  const ctx = await requireWrite("rfqs.write");
   const id = newId();
   const number = fd(formData, "number") || (await nextNumber(ctx.membership.organizationId, "rfq", "RFQ"));
   await createDoc(
@@ -775,7 +778,7 @@ export async function createRfqAction(formData: FormData) {
 }
 
 export async function uploadQuotationAction(formData: FormData) {
-  const ctx = await requirePermission("quotations.write");
+  const ctx = await requireWrite("quotations.write");
   const file = formData.get("file");
   let extraction: Record<string, unknown> | null = null;
   let fileId: string | null = null;
@@ -811,7 +814,7 @@ export async function uploadQuotationAction(formData: FormData) {
 }
 
 export async function scoreQuotationsAction(formData: FormData) {
-  const ctx = await requirePermission("quotations.write");
+  const ctx = await requireWrite("quotations.write");
   const rfqId = fd(formData, "rfqId");
   const rows = await listByOrg("quotations", ctx.membership.organizationId);
   const filtered = rfqId ? rows.filter((row) => asString(row.rfqId) === rfqId) : rows;
@@ -838,7 +841,7 @@ export async function scoreQuotationsAction(formData: FormData) {
 }
 
 export async function createTaskAction(formData: FormData) {
-  const ctx = await requirePermission("tasks.write");
+  const ctx = await requireWrite("tasks.write");
   await createDoc("tasks", {
     organizationId: ctx.membership.organizationId,
     title: fd(formData, "title"),
@@ -855,7 +858,7 @@ export async function createTaskAction(formData: FormData) {
 }
 
 export async function completeTaskAction(formData: FormData) {
-  const ctx = await requirePermission("tasks.write");
+  const ctx = await requireWrite("tasks.write");
   const id = fd(formData, "id");
   const task = await getOrgDoc("tasks", ctx.membership.organizationId, id);
   if (task) {
@@ -865,7 +868,7 @@ export async function completeTaskAction(formData: FormData) {
 }
 
 export async function inviteMemberAction(formData: FormData) {
-  const ctx = await requirePermission("team.invite");
+  const ctx = await requireWrite("team.invite");
   const orgId = ctx.membership.organizationId;
   const email = fd(formData, "email").toLowerCase();
   const role = fd(formData, "role") || "viewer";
@@ -891,19 +894,27 @@ export async function inviteMemberAction(formData: FormData) {
       });
     }
   } else {
+    const token = randomToken();
     await createDoc("organization_members", {
       organizationId: orgId,
       userId: null,
       invitedEmail: email,
       role,
       status: "invited",
-      tokenHash: newId(),
+      tokenHash: hashToken(token),
       invitedBy: ctx.user.id,
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
       deletedAt: null,
     });
+    const link = `${appUrl()}/invite?token=${encodeURIComponent(token)}`;
+    await getEmailProvider().send({
+      to: email,
+      subject: `Join ${ctx.membership.organizationName} on SupplierOS Africa`,
+      html: `<p>You have been invited to ${ctx.membership.organizationName} as ${role}.</p><p><a href="${link}">Accept invite</a></p>`,
+      text: `Accept invite: ${link}`,
+    });
   }
-  await refresh(["/app/settings/team"]);
+  await refresh(["/app/settings/team", "/app/team"]);
 }
 
 export async function globalSearchAction(queryText: string) {
@@ -981,7 +992,7 @@ export async function copilotAction(question: string) {
 }
 
 export async function updateSettingsAction(formData: FormData) {
-  const ctx = await requirePermission("settings.write");
+  const ctx = await requireWrite("settings.write");
   const orgId = ctx.membership.organizationId;
   await patchDoc("organizations", orgId, {
     name: fd(formData, "name") || ctx.membership.organizationName,
@@ -1004,16 +1015,8 @@ export async function updateSettingsAction(formData: FormData) {
 }
 
 export async function choosePlanAction(formData: FormData) {
-  const ctx = await requirePermission("org.billing");
-  const subs = await listByOrg("subscriptions", ctx.membership.organizationId);
-  const sub = subs[0];
-  if (sub) {
-    await patchDoc("subscriptions", asString(sub.id), {
-      planId: fd(formData, "planId"),
-      status: "active",
-    });
-  }
-  await refresh(["/app/settings/billing", "/app/subscription"]);
+  const { startCheckoutAction } = await import("@/app/actions/billing");
+  return startCheckoutAction(formData);
 }
 
 export async function markNotificationReadAction(formData: FormData) {

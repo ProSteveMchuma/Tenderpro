@@ -12,10 +12,11 @@ export default async function TeamPage() {
   const members = await listByOrg("organization_members", ctx.membership.organizationId, { orderBy: [{ field: "role", direction: "asc" }] });
   const rows = await Promise.all(
     members.map(async (member) => {
-      const profile = await docById("profiles", asString(member.userId));
+      const profile = member.userId ? await docById("profiles", asString(member.userId)) : null;
       return {
-        fullName: asString(profile?.fullName),
-        email: asString(profile?.email),
+        id: asString(member.id),
+        fullName: asString(profile?.fullName) || "Invited",
+        email: asString(profile?.email) || asString(member.invitedEmail),
         role: asString(member.role),
         status: asString(member.status),
       };
@@ -30,7 +31,7 @@ export default async function TeamPage() {
             <thead className="bg-muted/50 text-left"><tr><th className="px-3 py-2">Name</th><th className="px-3 py-2">Email</th><th className="px-3 py-2">Role</th><th className="px-3 py-2">Status</th></tr></thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={row.email} className="border-t"><td className="px-3 py-2">{row.fullName}</td><td className="px-3 py-2">{row.email}</td><td className="px-3 py-2 capitalize">{row.role}</td><td className="px-3 py-2">{row.status}</td></tr>
+                <tr key={row.id} className="border-t"><td className="px-3 py-2">{row.fullName}</td><td className="px-3 py-2">{row.email}</td><td className="px-3 py-2 capitalize">{row.role}</td><td className="px-3 py-2">{row.status}</td></tr>
               ))}
             </tbody>
           </table>

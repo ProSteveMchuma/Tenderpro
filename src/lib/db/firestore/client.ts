@@ -2,6 +2,7 @@ import "server-only";
 import { DocumentStore, resolveDriver } from "@/lib/db/types";
 import { createLocalDocumentStore } from "@/lib/db/firestore/local-store";
 import { createFirebaseDocumentStore } from "@/lib/db/firestore/admin";
+import { isProduction } from "@/lib/config/runtime";
 import { getFirebaseProjectId } from "@/lib/firebase/config";
 
 type GlobalStore = {
@@ -25,6 +26,9 @@ export async function getDocumentStore(): Promise<DocumentStore> {
   if (resolveDriver() !== "firestore") {
     throw new Error("Document store is only available when DATABASE_DRIVER=firestore.");
   }
+  if (isProduction() && firestoreMode() === "local") {
+    throw new Error("Cloud Firestore credentials are required in production.");
+  }
   if (globalForStore.__supplierosDocStore?.store) return globalForStore.__supplierosDocStore.store;
   if (!globalForStore.__supplierosDocStore) globalForStore.__supplierosDocStore = {};
   if (!globalForStore.__supplierosDocStore.ready) {
@@ -38,7 +42,7 @@ export async function getDocumentStore(): Promise<DocumentStore> {
           const hasCredentials = Boolean(
             process.env.FIREBASE_SERVICE_ACCOUNT_JSON || process.env.FIREBASE_SERVICE_ACCOUNT_PATH,
           );
-          if (hasCredentials) throw error;
+          if (hasCredentials || isProduction()) throw error;
           console.warn("Cloud Firestore unavailable, using local Firestore document store:", error);
           return createLocalDocumentStore();
         }

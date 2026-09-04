@@ -1,76 +1,26 @@
 import "server-only";
-import fs from "node:fs/promises";
 import {
   DbDoc,
   DocumentStore,
   QueryOptions,
   matchesWhere,
   sortDocs,
+  nowIso,
 } from "@/lib/db/types";
-import { getFirebaseProjectId, getFirestoreDatabaseId } from "@/lib/firebase/config";
+import { getFirestoreDatabaseId } from "@/lib/firebase/config";
+import { getFirebaseAdminApp } from "@/lib/firebase/admin-app";
 
 type GlobalFirebase = {
-  app?: import("firebase-admin/app").App;
   store?: DocumentStore;
 };
 
 const globalForFb = globalThis as typeof globalThis & { __supplierosFirebase?: GlobalFirebase };
 
-function readServiceAccountJson() {
-  const json = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  if (json) return json;
-  return null;
-}
-
-function serviceAccountPath() {
-  return process.env.FIREBASE_SERVICE_ACCOUNT_PATH || process.env.GOOGLE_APPLICATION_CREDENTIALS || "";
-}
-
-async function readServiceAccount() {
-  const json = readServiceAccountJson();
-  const raw = json ?? (serviceAccountPath() ? await fs.readFile(serviceAccountPath(), "utf8") : null);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as {
-      project_id?: string;
-      client_email?: string;
-      private_key?: string;
-    };
-  } catch {
-    throw new Error("Firebase service account JSON is not valid.");
-  }
-}
-
 export async function createFirebaseDocumentStore(): Promise<DocumentStore> {
   if (globalForFb.__supplierosFirebase?.store) return globalForFb.__supplierosFirebase.store;
 
-  const { cert, getApps, initializeApp } = await import("firebase-admin/app");
   const { getFirestore } = await import("firebase-admin/firestore");
-
-  const serviceAccount = await readServiceAccount();
-  const projectId = getFirebaseProjectId() || serviceAccount?.project_id;
-  if (!projectId) {
-    throw new Error("FIREBASE_PROJECT_ID or FIREBASE_SERVICE_ACCOUNT_JSON is required for cloud Firestore.");
-  }
-
-  let app = getApps()[0];
-  if (!app) {
-    if (serviceAccount?.client_email && serviceAccount.private_key) {
-      app = initializeApp({
-        credential: cert({
-          projectId: serviceAccount.project_id || projectId,
-          clientEmail: serviceAccount.client_email,
-          privateKey: serviceAccount.private_key.replace(/\\n/g, "\n"),
-        }),
-        projectId,
-      });
-    } else if (process.env.FIRESTORE_EMULATOR_HOST || process.env.FIREBASE_AUTH_EMULATOR_HOST) {
-      app = initializeApp({ projectId });
-    } else {
-      app = initializeApp({ projectId });
-    }
-  }
-
+  const app = await getFirebaseAdminApp();
   const db = getFirestore(app, getFirestoreDatabaseId());
   try {
     db.settings({ ignoreUndefinedProperties: true });
@@ -94,8 +44,6 @@ export async function createFirebaseDocumentStore(): Promise<DocumentStore> {
       await db.collection(collection).doc(id).delete();
     },
     async query(collection: string, options: QueryOptions = {}) {
-      // Push a single equality filter to Firestore so new projects work without composite indexes.
-      // Remaining filters, sorts, and limits run in memory (fine at organization scale).
       const where = options.where ?? [];
       const firstEq = where.find((clause) => clause.op === "==");
       const remainder = firstEq ? where.filter((clause) => clause !== firstEq) : where;
@@ -109,10 +57,22 @@ export async function createFirebaseDocumentStore(): Promise<DocumentStore> {
       if (options.limit != null) rows = rows.slice(0, options.limit);
       return rows;
     },
+    async increment(collection, id, field, extra = {}) {
+      const ref = db.collection(collection).doc(id);
+      return db.runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        const current = Number(snap.data()?.[field] ?? 1);
+        tx.set(
+          ref,
+          { id, [field]: current + 1, updatedAt: nowIso(), ...extra },
+          { merge: true },
+        );
+        return current;
+      });
+    },
   };
 
   if (!globalForFb.__supplierosFirebase) globalForFb.__supplierosFirebase = {};
-  globalForFb.__supplierosFirebase.app = app;
   globalForFb.__supplierosFirebase.store = store;
   return store;
 }

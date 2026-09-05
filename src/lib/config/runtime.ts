@@ -13,7 +13,14 @@ export function isDemoMode() {
 }
 
 export function appUrl() {
-  return (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
+  const explicit = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (explicit) return explicit.replace(/\/$/, "");
+  const vercelHost = (process.env.VERCEL_URL || process.env.VERCEL_BRANCH_URL || "").replace(
+    /^https?:\/\//,
+    "",
+  );
+  if (vercelHost) return `https://${vercelHost.replace(/\/$/, "")}`;
+  return "http://localhost:3000";
 }
 
 export function sessionSecret() {
@@ -32,7 +39,7 @@ export function assertProductionConfig() {
       throw new Error("FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_SERVICE_ACCOUNT_PATH is required in production.");
     }
   }
-  if (!process.env.NEXT_PUBLIC_APP_URL) {
-    throw new Error("NEXT_PUBLIC_APP_URL is required in production.");
+  if (appUrl() === "http://localhost:3000") {
+    throw new Error("NEXT_PUBLIC_APP_URL or VERCEL_URL is required in production.");
   }
 }

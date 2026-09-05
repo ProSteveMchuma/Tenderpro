@@ -137,16 +137,37 @@ Critical coverage includes money math, invoice balances, payment allocation, due
 
 ## Production deployment (Vercel + Firebase)
 
+GitHub is already connected to Vercel project **[tenderpro-l233](https://vercel.com/prostevemchumas-projects/tenderpro-l233)** (`prj_umvPHCzYbikwd4eqW2DDZnH04qq7`). Pull requests deploy previews automatically. There is not yet a production deployment of `main`.
+
+Project link for the Vercel CLI is committed at `.vercel/project.json`.
+
+Preview (this branch): https://tenderpro-l233-git-cursor-fireb-01fa49-prostevemchumas-projects.vercel.app
+
 1. This repo is already pointed at Firebase project `tenderpro-480721`.
-2. Generate a service account JSON and set `FIREBASE_PROJECT_ID` plus `FIREBASE_SERVICE_ACCOUNT_JSON` in Vercel. Never expose the service account to the browser.
-3. Set `FIRESTORE_DATABASE=tenderpro`. This project has no `(default)` native Firestore database.
-4. Deploy `firestore.rules`, `firestore.indexes.json` and `storage.rules`.
-5. Deploy this repository. Framework is Next.js (`vercel.json`).
-6. Point `NEXT_PUBLIC_APP_URL` at the production domain.
-7. Set `DEMO_MODE=false` so production does not seed demo tenants or show demo passwords.
-8. Configure Paystack: `PAYSTACK_SECRET_KEY`, webhook `https://<domain>/api/billing/paystack/webhook`.
-9. Configure Resend (`EMAIL_PROVIDER=resend`) so email verification and invites leave the server.
-10. Configure OpenAI when live extraction is needed. The app can run with `AI_PROVIDER=mock`.
+2. In [Vercel → Environment Variables](https://vercel.com/prostevemchumas-projects/tenderpro-l233/settings/environment-variables) set:
+
+   - `FIREBASE_SERVICE_ACCOUNT_JSON` (the Admin SDK JSON, server only)
+   - `SESSION_SECRET` (long random value)
+   - `FIRESTORE_DATABASE=tenderpro`
+   - `FIREBASE_PROJECT_ID=tenderpro-480721`
+   - `FIREBASE_USE_CLOUD=true`
+   - `STORAGE_DRIVER=firebase`
+   - `DATABASE_DRIVER=firestore`
+
+   `NEXT_PUBLIC_APP_URL` is optional on Vercel; the app uses `VERCEL_URL` for the current deployment.
+
+   Or, with a [Vercel token](https://vercel.com/account/tokens):
+
+   ```bash
+   VERCEL_TOKEN=... npm run vercel:env
+   ```
+
+3. Deploy `firestore.rules`, `firestore.indexes.json` and `storage.rules`.
+4. Production branch should be `main` (Vercel → Settings → Git). Deploy with **Promote** or `vercel --prod` after merge.
+5. Production defaults `DEMO_MODE` off. Set `DEMO_MODE=true` on Preview if you want the demo login on PR deployments.
+6. Configure Paystack: `PAYSTACK_SECRET_KEY`, webhook `https://<domain>/api/billing/paystack/webhook`.
+7. Configure Resend (`EMAIL_PROVIDER=resend`) so email verification and invites leave the server.
+8. Configure OpenAI when live extraction is needed. The app can run with `AI_PROVIDER=mock`.
 
 ## Security notes
 

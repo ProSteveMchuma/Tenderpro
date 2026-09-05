@@ -58,8 +58,9 @@ build
 *firebase-adminsdk*.json
 .secrets/
 
-# Vercel
-.vercel
+# Vercel (keep project.json so the CLI can link this repo)
+.vercel/*
+!.vercel/project.json
 
 # Misc
 .DS_Store

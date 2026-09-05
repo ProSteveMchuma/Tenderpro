@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { assertProductionConfig, isDemoMode, isProduction, sessionSecret } from "@/lib/config/runtime";
+import { appUrl, assertProductionConfig, isDemoMode, isProduction, sessionSecret } from "@/lib/config/runtime";
 
 describe("runtime config", () => {
   afterEach(() => {
@@ -50,8 +50,13 @@ describe("runtime config", () => {
     expect(() => assertProductionConfig()).toThrow(/FIREBASE_SERVICE_ACCOUNT/);
     vi.stubEnv("FIREBASE_SERVICE_ACCOUNT_JSON", '{"type":"service_account"}');
     vi.stubEnv("NEXT_PUBLIC_APP_URL", "");
-    expect(() => assertProductionConfig()).toThrow(/NEXT_PUBLIC_APP_URL/);
+    vi.stubEnv("VERCEL_URL", "");
+    expect(() => assertProductionConfig()).toThrow(/NEXT_PUBLIC_APP_URL or VERCEL_URL/);
+    vi.stubEnv("VERCEL_URL", "tenderpro-l233.vercel.app");
+    expect(() => assertProductionConfig()).not.toThrow();
+    expect(appUrl()).toBe("https://tenderpro-l233.vercel.app");
     vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://example.com");
+    expect(appUrl()).toBe("https://example.com");
     expect(() => assertProductionConfig()).not.toThrow();
   });
 });

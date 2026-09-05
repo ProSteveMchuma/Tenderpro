@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { PLAN_IDS, PLAN_PRICES_KES, PlanId } from "@/lib/constants";
-import { isProduction } from "@/lib/config/runtime";
+import { appUrl, isProduction } from "@/lib/config/runtime";
 
 export type BillingCheckout = {
   organizationId: string;
@@ -68,7 +68,7 @@ class PaystackBilling implements BillingProvider {
     if (!secret) throw new Error("PAYSTACK_SECRET_KEY is not configured.");
     const planId = (PLAN_IDS.includes(input.planId as PlanId) ? input.planId : "business") as PlanId;
     const amountKes = planAmountKes(planId, input.interval);
-    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
+    const origin = appUrl();
     const response = await fetch("https://api.paystack.co/transaction/initialize", {
       method: "POST",
       headers: {
@@ -79,7 +79,7 @@ class PaystackBilling implements BillingProvider {
         email: input.userEmail,
         amount: amountKes * 100,
         currency: "KES",
-        callback_url: `${appUrl}/api/billing/paystack/callback`,
+        callback_url: `${origin}/api/billing/paystack/callback`,
         metadata: {
           organizationId: input.organizationId,
           planId,

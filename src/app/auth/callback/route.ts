@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
+import { appUrl } from "@/lib/config/runtime";
 
 export async function GET() {
-  return NextResponse.redirect(new URL("/app", process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"));
+  return NextResponse.redirect(new URL("/app", appUrl()));
 }

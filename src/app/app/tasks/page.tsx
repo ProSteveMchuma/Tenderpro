@@ -1,4 +1,5 @@
-import { query } from "@/lib/db/client";
+import { listByOrg } from "@/lib/db/repo";
+import { asString } from "@/lib/db/types";
 import { requirePermission } from "@/lib/auth/session";
 import { PageHeader, StatusBadge } from "@/components/shared/chrome";
 import { completeTaskAction, createTaskAction } from "@/app/actions/records";
@@ -7,10 +8,15 @@ import { Button } from "@/components/ui/button";
 
 export default async function TasksPage() {
   const ctx = await requirePermission("tasks.read");
-  const rows = await query<{ id: string; title: string; priority: string; due_date: string | null; status: string }>(
-    `select id, title, priority, due_date::text, status from tasks where organization_id=$1 and deleted_at is null order by status, due_date`,
-    [ctx.membership.organizationId],
-  );
+  const rows = (await listByOrg("tasks", ctx.membership.organizationId, { orderBy: [{ field: "dueDate", direction: "asc" }] }))
+    .map((row) => ({
+      id: asString(row.id),
+      title: asString(row.title),
+      priority: asString(row.priority),
+      dueDate: row.dueDate ? asString(row.dueDate) : null,
+      status: asString(row.status),
+    }))
+    .sort((a, b) => a.status.localeCompare(b.status) || asString(a.dueDate).localeCompare(asString(b.dueDate)));
   return (
     <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
       <div>
@@ -20,7 +26,7 @@ export default async function TasksPage() {
             <form key={row.id} action={completeTaskAction} className="flex items-center justify-between rounded-xl border bg-background px-4 py-3">
               <div>
                 <div className="font-medium">{row.title}</div>
-                <div className="text-xs text-muted-foreground">{row.due_date} · {row.priority}</div>
+                <div className="text-xs text-muted-foreground">{row.dueDate} · {row.priority}</div>
               </div>
               <div className="flex items-center gap-2">
                 <StatusBadge value={row.status} />

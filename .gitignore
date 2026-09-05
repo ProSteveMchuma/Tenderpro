@@ -54,8 +54,13 @@ build
 .local-uploads/
 *.db
 
-# Vercel
-.vercel
+# Firebase Admin private keys — never commit
+*firebase-adminsdk*.json
+.secrets/
+
+# Vercel (keep project.json so the CLI can link this repo)
+.vercel/*
+!.vercel/project.json
 
 # Misc
 .DS_Store

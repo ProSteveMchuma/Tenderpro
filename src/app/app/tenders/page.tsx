@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { query } from "@/lib/db/client";
+import { listByOrg } from "@/lib/db/repo";
+import { asString, moneyString } from "@/lib/db/types";
 import { requirePermission } from "@/lib/auth/session";
 import { PageHeader, StatusBadge } from "@/components/shared/chrome";
 import { formatMoney } from "@/lib/money";
@@ -7,20 +8,16 @@ import { formatDateTime } from "@/lib/dates";
 
 export default async function TendersPage() {
   const ctx = await requirePermission("tenders.read");
-  const rows = await query<{
-    id: string;
-    title: string;
-    reference: string | null;
-    procuring_entity: string | null;
-    closing_at: string | null;
-    tender_value: string | null;
-    status: string;
-    readiness_percent: number;
-  }>(
-    `select id, title, reference, procuring_entity, closing_at::text, tender_value::text, status, readiness_percent
-     from tenders where organization_id=$1 and deleted_at is null order by closing_at nulls last`,
-    [ctx.membership.organizationId],
-  );
+  const rows = (await listByOrg("tenders", ctx.membership.organizationId, { orderBy: [{ field: "closingAt", direction: "asc" }] })).map((row) => ({
+    id: asString(row.id),
+    title: asString(row.title),
+    reference: row.reference ? asString(row.reference) : null,
+    procuringEntity: row.procuringEntity ? asString(row.procuringEntity) : null,
+    closingAt: row.closingAt ? asString(row.closingAt) : null,
+    tenderValue: row.tenderValue ? moneyString(row.tenderValue) : null,
+    status: asString(row.status),
+    readinessPercent: Number(row.readinessPercent ?? 0),
+  }));
   return (
     <div>
       <PageHeader
@@ -53,10 +50,10 @@ export default async function TendersPage() {
                   </Link>
                   <div className="text-xs text-muted-foreground">{row.title}</div>
                 </td>
-                <td className="px-3 py-2">{row.procuring_entity}</td>
-                <td className="px-3 py-2">{formatDateTime(row.closing_at, ctx.membership.timezone)}</td>
-                <td className="px-3 py-2 tabular-nums">{row.tender_value ? formatMoney(row.tender_value, ctx.membership.currency) : "—"}</td>
-                <td className="px-3 py-2">{row.readiness_percent}%</td>
+                <td className="px-3 py-2">{row.procuringEntity}</td>
+                <td className="px-3 py-2">{formatDateTime(row.closingAt, ctx.membership.timezone)}</td>
+                <td className="px-3 py-2 tabular-nums">{row.tenderValue ? formatMoney(row.tenderValue, ctx.membership.currency) : "—"}</td>
+                <td className="px-3 py-2">{row.readinessPercent}%</td>
                 <td className="px-3 py-2">
                   <StatusBadge value={row.status} />
                 </td>

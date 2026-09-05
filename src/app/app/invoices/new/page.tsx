@@ -1,6 +1,7 @@
 import { createInvoiceAction } from "@/app/actions/records";
 import { requirePermission } from "@/lib/auth/session";
-import { query, queryOne } from "@/lib/db/client";
+import { getOrgDoc, listByOrg } from "@/lib/db/repo";
+import { asString } from "@/lib/db/types";
 import { PageHeader } from "@/components/shared/chrome";
 import { Field } from "@/components/auth/auth-card";
 import { Button } from "@/components/ui/button";
@@ -9,15 +10,20 @@ import { canInvoicePurchaseOrder } from "@/lib/domain/invoice";
 export default async function NewInvoicePage({ searchParams }: { searchParams: Promise<{ poId?: string }> }) {
   const ctx = await requirePermission("invoices.write");
   const { poId } = await searchParams;
-  const customers = await query<{ id: string; name: string; payment_terms_days: number }>("select id, name, payment_terms_days from customers where organization_id=$1 and deleted_at is null", [ctx.membership.organizationId]);
-  const pos = await query<{ id: string; number: string }>("select id, number from purchase_orders where organization_id=$1 and deleted_at is null", [ctx.membership.organizationId]);
-  const selectedPo = poId
-    ? await queryOne<{ requires_grn: boolean }>("select requires_grn from purchase_orders where id=$1 and organization_id=$2", [poId, ctx.membership.organizationId])
-    : null;
+  const orgId = ctx.membership.organizationId;
+  const customers = (await listByOrg("customers", orgId)).map((c) => ({
+    id: asString(c.id),
+    name: asString(c.name),
+    paymentTermsDays: Number(c.paymentTermsDays ?? 0),
+  }));
+  const pos = (await listByOrg("purchase_orders", orgId)).map((p) => ({ id: asString(p.id), number: asString(p.number) }));
+  const selectedPo = poId ? await getOrgDoc("purchase_orders", orgId, poId) : null;
   const grn = poId
-    ? await queryOne("select id from goods_receipts where purchase_order_id=$1 and organization_id=$2 and status in ('signed','complete')", [poId, ctx.membership.organizationId])
+    ? (await listByOrg("goods_receipts", orgId, { where: [{ field: "purchaseOrderId", op: "==", value: poId }] })).find((row) =>
+        ["signed", "complete"].includes(asString(row.status)),
+      )
     : null;
-  const gate = selectedPo ? canInvoicePurchaseOrder({ requiresGrn: selectedPo.requires_grn, hasSignedGrn: Boolean(grn) }) : { allowed: true, warning: null };
+  const gate = selectedPo ? canInvoicePurchaseOrder({ requiresGrn: Boolean(selectedPo.requiresGrn), hasSignedGrn: Boolean(grn) }) : { allowed: true, warning: null };
   return (
     <div className="max-w-xl">
       <PageHeader title="Create invoice" />

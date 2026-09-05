@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
-import { query, queryOne } from "@/lib/db/client";
+import { getOrgDoc, listByOrg } from "@/lib/db/repo";
+import { asString, moneyString } from "@/lib/db/types";
 import { PageHeader, StatusBadge } from "@/components/shared/chrome";
 import { formatMoney } from "@/lib/money";
 import { canInvoicePurchaseOrder, poLifecycleStage } from "@/lib/domain/invoice";
@@ -11,26 +12,23 @@ const STAGES = ["PO RECEIVED", "SOURCING", "DELIVERY", "GRN", "INVOICE", "PAYMEN
 export default async function PurchaseOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const ctx = await requirePermission("purchase_orders.read");
-  const po = await queryOne<Record<string, unknown>>(
-    `select po.*, c.name as customer_name from purchase_orders po
-     left join customers c on c.id = po.customer_id
-     where po.id=$1 and po.organization_id=$2 and po.deleted_at is null`,
-    [id, ctx.membership.organizationId],
-  );
+  const orgId = ctx.membership.organizationId;
+  const po = await getOrgDoc("purchase_orders", orgId, id);
   if (!po) notFound();
-  const grn = await queryOne(
-    `select id from goods_receipts where purchase_order_id=$1 and organization_id=$2 and deleted_at is null and status in ('signed','complete')`,
-    [id, ctx.membership.organizationId],
+  const customer = po.customerId ? await getOrgDoc("customers", orgId, asString(po.customerId)) : null;
+  const grn = (await listByOrg("goods_receipts", orgId, { where: [{ field: "purchaseOrderId", op: "==", value: id }] })).find((row) =>
+    ["signed", "complete"].includes(asString(row.status)),
   );
-  const gate = canInvoicePurchaseOrder({ requiresGrn: Boolean(po.requires_grn), hasSignedGrn: Boolean(grn) });
-  const current = poLifecycleStage(String(po.status));
-  const items = await query<{ description: string; quantity: string; unit_price: string; total: string }>(
-    `select description, quantity::text, unit_price::text, total::text from purchase_order_items where purchase_order_id=$1`,
-    [id],
-  );
+  const gate = canInvoicePurchaseOrder({ requiresGrn: Boolean(po.requiresGrn), hasSignedGrn: Boolean(grn) });
+  const current = poLifecycleStage(asString(po.status));
+  const items = (await listByOrg("purchase_order_items", orgId, { where: [{ field: "purchaseOrderId", op: "==", value: id }] })).map((item) => ({
+    description: asString(item.description),
+    quantity: moneyString(item.quantity),
+    total: moneyString(item.total),
+  }));
   return (
     <div>
-      <PageHeader title={String(po.number)} description={String(po.customer_name || "")} />
+      <PageHeader title={asString(po.number)} description={asString(customer?.name)} />
       <div className="mb-6 grid grid-cols-2 gap-2 md:grid-cols-6">
         {STAGES.map((stage, index) => (
           <div
@@ -53,17 +51,17 @@ export default async function PurchaseOrderDetailPage({ params }: { params: Prom
       )}
       <div className="rounded-xl border bg-background p-4">
         <div className="flex items-center justify-between">
-          <StatusBadge value={String(po.status)} />
-          <div className="font-semibold">{formatMoney(String(po.total), String(po.currency))}</div>
+          <StatusBadge value={asString(po.status)} />
+          <div className="font-semibold">{formatMoney(moneyString(po.total), asString(po.currency))}</div>
         </div>
-        <p className="mt-3 text-sm text-muted-foreground">{String(po.payment_terms_text || "")}</p>
+        <p className="mt-3 text-sm text-muted-foreground">{asString(po.paymentTermsText)}</p>
         <table className="mt-4 w-full text-sm">
           <tbody>
             {items.map((item) => (
               <tr key={item.description} className="border-t">
                 <td className="py-2">{item.description}</td>
                 <td className="py-2">{item.quantity}</td>
-                <td className="py-2 tabular-nums">{formatMoney(item.total, String(po.currency))}</td>
+                <td className="py-2 tabular-nums">{formatMoney(item.total, asString(po.currency))}</td>
               </tr>
             ))}
           </tbody>

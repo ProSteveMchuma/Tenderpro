@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { query } from "@/lib/db/client";
+import { listByOrg } from "@/lib/db/repo";
+import { asString, moneyString } from "@/lib/db/types";
 import { requirePermission } from "@/lib/auth/session";
 import { PageHeader, StatusBadge } from "@/components/shared/chrome";
 import { formatMoney } from "@/lib/money";
@@ -10,18 +11,13 @@ import { updateOpportunityStageAction } from "@/app/actions/records";
 export default async function OpportunitiesPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
   const ctx = await requirePermission("opportunities.read");
   const { view } = await searchParams;
-  const rows = await query<{
-    id: string;
-    title: string;
-    stage: string;
-    estimated_value: string;
-    probability: number;
-    expected_close_date: string | null;
-  }>(
-    `select id, title, stage, estimated_value::text, probability, expected_close_date::text
-     from opportunities where organization_id=$1 and deleted_at is null order by created_at desc`,
-    [ctx.membership.organizationId],
-  );
+  const rows = (await listByOrg("opportunities", ctx.membership.organizationId, { orderBy: [{ field: "createdAt", direction: "desc" }] })).map((row) => ({
+    id: asString(row.id),
+    title: asString(row.title),
+    stage: asString(row.stage),
+    estimatedValue: moneyString(row.estimatedValue),
+    probability: Number(row.probability ?? 0),
+  }));
   return (
     <div>
       <PageHeader
@@ -51,7 +47,7 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
                   .map((row) => (
                     <form key={row.id} action={updateOpportunityStageAction} className="rounded-lg border p-3">
                       <div className="text-sm font-medium">{row.title}</div>
-                      <div className="mt-1 text-xs text-muted-foreground">{formatMoney(row.estimated_value, ctx.membership.currency)}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">{formatMoney(row.estimatedValue, ctx.membership.currency)}</div>
                       <input type="hidden" name="id" value={row.id} />
                       <AutoSubmitSelect name="stage" defaultValue={row.stage} options={[...OPPORTUNITY_STAGES]} />
                     </form>
@@ -78,7 +74,7 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
                   <td className="px-3 py-2">
                     <StatusBadge value={row.stage} />
                   </td>
-                  <td className="px-3 py-2 tabular-nums">{formatMoney(row.estimated_value, ctx.membership.currency)}</td>
+                  <td className="px-3 py-2 tabular-nums">{formatMoney(row.estimatedValue, ctx.membership.currency)}</td>
                   <td className="px-3 py-2">{row.probability}%</td>
                 </tr>
               ))}

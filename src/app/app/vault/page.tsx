@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { query } from "@/lib/db/client";
+import { listByOrg } from "@/lib/db/repo";
+import { asString } from "@/lib/db/types";
 import { requirePermission } from "@/lib/auth/session";
 import { PageHeader, StatusBadge } from "@/components/shared/chrome";
 import { expiryStatus } from "@/lib/dates";
@@ -7,23 +8,18 @@ import { VAULT_CATEGORIES } from "@/lib/constants";
 
 export default async function VaultPage() {
   const ctx = await requirePermission("vault.read");
-  const rows = await query<{
-    id: string;
-    name: string;
-    category: string;
-    document_number: string | null;
-    expiry_date: string | null;
-    issuing_authority: string | null;
-  }>(
-    `select id, name, category, document_number, expiry_date::text, issuing_authority
-     from company_documents where organization_id=$1 and deleted_at is null order by expiry_date nulls last`,
-    [ctx.membership.organizationId],
-  );
+  const rows = (await listByOrg("company_documents", ctx.membership.organizationId, { orderBy: [{ field: "expiryDate", direction: "asc" }] })).map((row) => ({
+    id: asString(row.id),
+    name: asString(row.name),
+    category: asString(row.category),
+    documentNumber: row.documentNumber ? asString(row.documentNumber) : null,
+    expiryDate: row.expiryDate ? asString(row.expiryDate) : null,
+  }));
   const now = new Date();
   const counts = {
-    valid: rows.filter((row) => expiryStatus(row.expiry_date, 30, now) === "valid" || (!row.expiry_date && row.name)).length,
-    expiring_soon: rows.filter((row) => expiryStatus(row.expiry_date, 30, now) === "expiring_soon").length,
-    expired: rows.filter((row) => expiryStatus(row.expiry_date, 30, now) === "expired").length,
+    valid: rows.filter((row) => expiryStatus(row.expiryDate, 30, now) === "valid" || (!row.expiryDate && row.name)).length,
+    expiring_soon: rows.filter((row) => expiryStatus(row.expiryDate, 30, now) === "expiring_soon").length,
+    expired: rows.filter((row) => expiryStatus(row.expiryDate, 30, now) === "expired").length,
   };
   return (
     <div>
@@ -54,13 +50,13 @@ export default async function VaultPage() {
           </thead>
           <tbody>
             {rows.map((row) => {
-              const status = expiryStatus(row.expiry_date, 30, now);
+              const status = expiryStatus(row.expiryDate, 30, now);
               return (
                 <tr key={row.id} className="border-t">
                   <td className="px-3 py-2 font-medium">{row.name}</td>
                   <td className="px-3 py-2">{VAULT_CATEGORIES.includes(row.category as never) ? row.category.replaceAll("_", " ") : row.category}</td>
-                  <td className="px-3 py-2">{row.document_number}</td>
-                  <td className="px-3 py-2">{row.expiry_date || "No expiry"}</td>
+                  <td className="px-3 py-2">{row.documentNumber}</td>
+                  <td className="px-3 py-2">{row.expiryDate || "No expiry"}</td>
                   <td className="px-3 py-2">
                     <StatusBadge value={status} />
                   </td>

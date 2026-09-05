@@ -9,10 +9,7 @@ import { Suspense } from "react";
 
 function ResetForm() {
   const params = useSearchParams();
-  const [state, action] = useActionState(
-    async (_prev: { error?: string; ok?: boolean } | null, formData: FormData) => resetPasswordAction(formData),
-    null,
-  );
+  const [state, action] = useActionState(resetPasswordAction, null);
   return (
     <AuthCard title="Reset password">
       <form action={action}>

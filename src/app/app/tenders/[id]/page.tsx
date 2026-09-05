@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
-import { query, queryOne } from "@/lib/db/client";
+import { getOrgDoc, listByOrg } from "@/lib/db/repo";
+import { asString, moneyString } from "@/lib/db/types";
 import { calculateTenderReadiness } from "@/lib/domain/tender-readiness";
 import { formatMoney } from "@/lib/money";
 import { formatDateTime } from "@/lib/dates";
@@ -12,36 +13,38 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 export default async function TenderWorkspacePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const ctx = await requirePermission("tenders.read");
-  const tender = await queryOne<Record<string, unknown>>(
-    `select * from tenders where id=$1 and organization_id=$2 and deleted_at is null`,
-    [id, ctx.membership.organizationId],
-  );
+  const orgId = ctx.membership.organizationId;
+  const tender = await getOrgDoc("tenders", orgId, id);
   if (!tender) notFound();
-  const requirements = await query<{
-    id: string;
-    requirement_text: string;
-    category: string;
-    mandatory: boolean;
-    status: string;
-    match_reason: string | null;
-    confidence: string;
-    page_number: number | null;
-  }>(
-    `select id, requirement_text, category, mandatory, status, match_reason, confidence, page_number
-     from tender_requirements where tender_id=$1 and organization_id=$2 order by mandatory desc, category`,
-    [id, ctx.membership.organizationId],
-  );
+  const requirements = (await listByOrg("tender_requirements", orgId, { where: [{ field: "tenderId", op: "==", value: id }] }))
+    .map((row) => ({
+      id: asString(row.id),
+      requirementText: asString(row.requirementText),
+      category: asString(row.category),
+      mandatory: Boolean(row.mandatory),
+      status: asString(row.status),
+      matchReason: row.matchReason ? asString(row.matchReason) : null,
+    }))
+    .sort((a, b) => {
+      if (a.mandatory !== b.mandatory) return a.mandatory ? -1 : 1;
+      return a.category.localeCompare(b.category);
+    });
   const readiness = calculateTenderReadiness(requirements);
-  const audit = await queryOne<{ output: unknown }>(
-    `select output from ai_jobs where organization_id=$1 and entity_id=$2 and capability='runBidAudit' order by created_at desc limit 1`,
-    [ctx.membership.organizationId, id],
-  );
+  const auditRows = await listByOrg("ai_jobs", orgId, {
+    where: [
+      { field: "entityId", op: "==", value: id },
+      { field: "capability", op: "==", value: "runBidAudit" },
+    ],
+    orderBy: [{ field: "createdAt", direction: "desc" }],
+    limit: 1,
+  });
+  const audit = auditRows[0] ?? null;
   const missingMandatory = readiness.missingMandatory.map((item) => item);
   return (
     <div>
       <PageHeader
-        title={String(tender.title)}
-        description={`${tender.reference || "No reference"} · ${tender.procuring_entity || "Unknown entity"}`}
+        title={asString(tender.title)}
+        description={`${asString(tender.reference) || "No reference"} · ${asString(tender.procuringEntity) || "Unknown entity"}`}
       />
       <div className="mb-6 grid gap-3 md:grid-cols-4">
         <div className="rounded-xl border bg-background p-4">
@@ -56,12 +59,12 @@ export default async function TenderWorkspacePage({ params }: { params: Promise<
         </div>
         <div className="rounded-xl border bg-background p-4">
           <div className="text-xs text-muted-foreground">Closes</div>
-          <div className="mt-1 text-sm font-medium">{formatDateTime(String(tender.closing_at || ""), ctx.membership.timezone)}</div>
+          <div className="mt-1 text-sm font-medium">{formatDateTime(asString(tender.closingAt), ctx.membership.timezone)}</div>
         </div>
         <div className="rounded-xl border bg-background p-4">
           <div className="text-xs text-muted-foreground">Value</div>
           <div className="mt-1 text-lg font-semibold">
-            {tender.tender_value ? formatMoney(String(tender.tender_value), String(tender.currency || ctx.membership.currency)) : "—"}
+            {tender.tenderValue ? formatMoney(moneyString(tender.tenderValue), asString(tender.currency, ctx.membership.currency)) : "—"}
           </div>
         </div>
       </div>
@@ -69,7 +72,7 @@ export default async function TenderWorkspacePage({ params }: { params: Promise<
         <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-950 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100">
           <div className="font-semibold">⚠ HIGH DISQUALIFICATION RISK</div>
           <p className="mt-1 text-sm">
-            Missing mandatory requirement: {missingMandatory[0] ? requirements.find((row) => row.status !== "complete" && row.mandatory)?.requirement_text : "See checklist"}
+            Missing mandatory requirement: {missingMandatory[0] ? requirements.find((row) => row.status !== "complete" && row.mandatory)?.requirementText : "See checklist"}
           </p>
         </div>
       ) : null}
@@ -85,19 +88,19 @@ export default async function TenderWorkspacePage({ params }: { params: Promise<
           <dl className="grid gap-3 sm:grid-cols-2">
             <div>
               <dt className="text-muted-foreground">Submission method</dt>
-              <dd>{String(tender.submission_method || "—")}</dd>
+              <dd>{asString(tender.submissionMethod) || "—"}</dd>
             </div>
             <div>
               <dt className="text-muted-foreground">Location / portal</dt>
-              <dd>{String(tender.submission_location || "—")}</dd>
+              <dd>{asString(tender.submissionLocation) || "—"}</dd>
             </div>
             <div>
               <dt className="text-muted-foreground">Security</dt>
-              <dd>{tender.tender_security_amount ? formatMoney(String(tender.tender_security_amount), ctx.membership.currency) : "—"}</dd>
+              <dd>{tender.tenderSecurityAmount ? formatMoney(moneyString(tender.tenderSecurityAmount), ctx.membership.currency) : "—"}</dd>
             </div>
             <div>
               <dt className="text-muted-foreground">Validity</dt>
-              <dd>{String(tender.tender_validity_period || "—")}</dd>
+              <dd>{asString(tender.tenderValidityPeriod) || "—"}</dd>
             </div>
           </dl>
           <form action={rerunTenderAnalysisAction} className="mt-4">
@@ -121,13 +124,13 @@ export default async function TenderWorkspacePage({ params }: { params: Promise<
             <tbody>
               {requirements.map((row) => (
                 <tr key={row.id} className="border-t">
-                  <td className="px-3 py-2">{row.requirement_text}</td>
+                  <td className="px-3 py-2">{row.requirementText}</td>
                   <td className="px-3 py-2 capitalize">{row.category}</td>
                   <td className="px-3 py-2">{row.mandatory ? "Yes" : "No"}</td>
                   <td className="px-3 py-2">
                     <StatusBadge value={row.status} />
                   </td>
-                  <td className="px-3 py-2 text-muted-foreground">{row.match_reason}</td>
+                  <td className="px-3 py-2 text-muted-foreground">{row.matchReason}</td>
                 </tr>
               ))}
             </tbody>
@@ -151,7 +154,7 @@ export default async function TenderWorkspacePage({ params }: { params: Promise<
           <ul className="mt-3 space-y-2 text-sm">
             <li>All mandatory documents attached {readiness.highDisqualificationRisk ? "✗" : "✓"}</li>
             <li>Forms signed {requirements.some((row) => row.category === "forms" && row.status !== "complete") ? "✗" : "✓"}</li>
-            <li>Closing deadline confirmed ✓ — {String(tender.closing_date || "")} {String(tender.closing_time || "")}</li>
+            <li>Closing deadline confirmed ✓ — {asString(tender.closingDate)} {asString(tender.closingTime)}</li>
           </ul>
           <form action={runBidAuditAction} className="mt-4">
             <input type="hidden" name="tenderId" value={id} />

@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { query } from "@/lib/db/client";
+import { listByOrg } from "@/lib/db/repo";
+import { asString, moneyString } from "@/lib/db/types";
 import { requirePermission } from "@/lib/auth/session";
 import { PageHeader, StatusBadge } from "@/components/shared/chrome";
 import { formatMoney } from "@/lib/money";
@@ -7,12 +8,18 @@ import { daysOverdue } from "@/lib/dates";
 
 export default async function InvoicesPage() {
   const ctx = await requirePermission("invoices.read");
-  const rows = await query<{ id: string; number: string; status: string; total: string; outstanding: string; due_date: string; customer: string | null }>(
-    `select i.id, i.number, i.status, i.total::text, i.outstanding::text, i.due_date::text, c.name as customer
-     from invoices i left join customers c on c.id=i.customer_id
-     where i.organization_id=$1 and i.deleted_at is null order by i.due_date`,
-    [ctx.membership.organizationId],
-  );
+  const orgId = ctx.membership.organizationId;
+  const invoices = await listByOrg("invoices", orgId, { orderBy: [{ field: "dueDate", direction: "asc" }] });
+  const customers = await listByOrg("customers", orgId);
+  const customerById = new Map(customers.map((row) => [asString(row.id), asString(row.name)]));
+  const rows = invoices.map((invoice) => ({
+    id: asString(invoice.id),
+    number: asString(invoice.number),
+    status: asString(invoice.status),
+    outstanding: moneyString(invoice.outstanding),
+    dueDate: asString(invoice.dueDate),
+    customer: customerById.get(asString(invoice.customerId)) ?? null,
+  }));
   return (
     <div>
       <PageHeader title="Invoices" action={<Link className="rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground" href="/app/invoices/new">Create invoice</Link>} />
@@ -24,7 +31,7 @@ export default async function InvoicesPage() {
               <tr key={row.id} className="border-t">
                 <td className="px-3 py-2"><Link className="font-medium hover:underline" href={`/app/invoices/${row.id}`}>{row.number}</Link></td>
                 <td className="px-3 py-2">{row.customer}</td>
-                <td className="px-3 py-2">{row.due_date}{daysOverdue(row.due_date) > 0 ? ` · ${daysOverdue(row.due_date)}d overdue` : ""}</td>
+                <td className="px-3 py-2">{row.dueDate}{daysOverdue(row.dueDate) > 0 ? ` · ${daysOverdue(row.dueDate)}d overdue` : ""}</td>
                 <td className="px-3 py-2 tabular-nums">{formatMoney(row.outstanding, ctx.membership.currency)}</td>
                 <td className="px-3 py-2"><StatusBadge value={row.status} /></td>
               </tr>

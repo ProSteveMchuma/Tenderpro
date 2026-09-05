@@ -1,4 +1,5 @@
-import { query } from "@/lib/db/client";
+import { listByOrg } from "@/lib/db/repo";
+import { asString, moneyString } from "@/lib/db/types";
 import { requirePermission } from "@/lib/auth/session";
 import { PageHeader } from "@/components/shared/chrome";
 import { formatMoney } from "@/lib/money";
@@ -8,10 +9,21 @@ import { Button } from "@/components/ui/button";
 
 export default async function QuotationsPage() {
   const ctx = await requirePermission("quotations.read");
-  const rows = await query<{ id: string; supplier_name: string | null; total: string; score: string | null; delivery_period: string | null; warranty: string | null }>(
-    `select id, supplier_name, total::text, score::text, delivery_period, warranty from quotations where organization_id=$1 order by score desc nulls last`,
-    [ctx.membership.organizationId],
-  );
+  const rows = (await listByOrg("quotations", ctx.membership.organizationId))
+    .map((row) => ({
+      id: asString(row.id),
+      supplierName: row.supplierName ? asString(row.supplierName) : null,
+      total: moneyString(row.total),
+      score: row.score == null ? null : asString(row.score),
+      deliveryPeriod: row.deliveryPeriod ? asString(row.deliveryPeriod) : null,
+      warranty: row.warranty ? asString(row.warranty) : null,
+    }))
+    .sort((a, b) => {
+      if (a.score == null && b.score == null) return 0;
+      if (a.score == null) return 1;
+      if (b.score == null) return -1;
+      return Number(b.score) - Number(a.score);
+    });
   const recommended = rows[0];
   return (
     <div>
@@ -31,7 +43,7 @@ export default async function QuotationsPage() {
       </div>
       {recommended ? (
         <div className="mb-4 rounded-xl border bg-emerald-50 p-4 text-sm text-emerald-950">
-          Recommended supplier: <strong>{recommended.supplier_name}</strong> with score {recommended.score ?? "n/a"}. Override if another supplier is strategically better.
+          Recommended supplier: <strong>{recommended.supplierName}</strong> with score {recommended.score ?? "n/a"}. Override if another supplier is strategically better.
         </div>
       ) : null}
       <div className="overflow-x-auto rounded-xl border bg-background">
@@ -40,9 +52,9 @@ export default async function QuotationsPage() {
           <tbody>
             {rows.map((row) => (
               <tr key={row.id} className="border-t">
-                <td className="px-3 py-2">{row.supplier_name}</td>
+                <td className="px-3 py-2">{row.supplierName}</td>
                 <td className="px-3 py-2 tabular-nums">{formatMoney(row.total, ctx.membership.currency)}</td>
-                <td className="px-3 py-2">{row.delivery_period}</td>
+                <td className="px-3 py-2">{row.deliveryPeriod}</td>
                 <td className="px-3 py-2">{row.warranty}</td>
                 <td className="px-3 py-2">{row.score ?? "—"}</td>
               </tr>

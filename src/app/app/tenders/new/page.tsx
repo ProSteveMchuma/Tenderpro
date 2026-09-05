@@ -1,16 +1,17 @@
 import { createTenderAction } from "@/app/actions/records";
 import { requirePermission } from "@/lib/auth/session";
-import { query } from "@/lib/db/client";
+import { listByOrg } from "@/lib/db/repo";
+import { asString } from "@/lib/db/types";
 import { PageHeader } from "@/components/shared/chrome";
 import { Field } from "@/components/auth/auth-card";
 import { Button } from "@/components/ui/button";
 
 export default async function NewTenderPage() {
   const ctx = await requirePermission("tenders.write");
-  const customers = await query<{ id: string; name: string }>(
-    "select id, name from customers where organization_id=$1 and deleted_at is null order by name",
-    [ctx.membership.organizationId],
-  );
+  const customers = (await listByOrg("customers", ctx.membership.organizationId, { orderBy: [{ field: "name", direction: "asc" }] })).map((item) => ({
+    id: asString(item.id),
+    name: asString(item.name),
+  }));
   return (
     <div className="max-w-2xl">
       <PageHeader title="New tender" description="Create manually or upload a tender document for AI analysis." />

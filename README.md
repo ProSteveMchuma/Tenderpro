@@ -14,23 +14,26 @@ The product metric that matters is **money collected**.
 
 - Next.js 16 (App Router), React 19, TypeScript
 - Tailwind CSS 4 and shadcn/ui
-- PostgreSQL via Supabase in production
-- PGlite (embedded Postgres) for local/demo when `DATABASE_URL` is not set
-- Supabase Auth in production; signed httpOnly sessions in demo mode
-- Supabase Storage in production; local `.data/uploads` in demo mode
+- **Firebase Firestore** as the default database (`DATABASE_DRIVER=firestore`)
+- Firebase project: **tenderpro-480721** (`src/lib/firebase/config.ts`)
+- Local file-backed Firestore store (`.data/firestore/db.json`) when no Admin service account is set
+- Cloud Firestore via `firebase-admin` when `FIREBASE_SERVICE_ACCOUNT_JSON` or the emulator is configured
+- Signed httpOnly sessions (`sos_session`); Firebase Auth is not required
+- Firebase Storage for uploads when a service account is configured (local `.data/uploads` in development only)
+- Paystack checkout + webhook for subscriptions (`/api/billing/paystack/webhook`)
 - AI provider abstraction (`AI_PROVIDER`, `AI_MODEL`) with OpenAI and a schema-validated mock
 - Vitest for business-critical tests
 
 ## Architecture
 
-- **Multi-tenant:** every business record has `organization_id`. Server actions always use the organization from the authenticated membership, never an unverified client-supplied org id.
+- **Multi-tenant:** every business record has `organizationId`. Server actions always use the organization from the authenticated membership, never an unverified client-supplied org id.
 - **RBAC:** owner, admin, procurement, finance, operations, viewer with a permission map that can grow.
 - **Entitlements:** plan limits live in `src/lib/entitlements.ts` only.
-- **Money:** `numeric` in Postgres and `decimal.js` in application code. No floating-point arithmetic.
+- **Money:** stored as decimal strings in Firestore and calculated with `decimal.js`. No floating-point arithmetic.
 - **Tender deadlines:** stored as local date + time + timezone, plus a computed UTC timestamp.
 - **AI:** capability functions (`analyzeTender`, `extractPurchaseOrder`, …) with Zod validation. Untrusted document text cannot override system instructions.
 - **Notifications:** in-app immediately; email (Resend or console) and WhatsApp (mock) adapters are ready.
-- **Billing:** development provider ships with the MVP. Paystack and M-Pesa can be added behind the same interface.
+- **Billing:** Paystack in production (`PAYSTACK_SECRET_KEY`). Development billing simulates plan switches locally.
 
 ## Local setup
 
@@ -62,30 +65,54 @@ See `.env.example`. Never commit `.env`.
 
 Required in production:
 
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY` (server only)
-- `DATABASE_URL` (Supabase Postgres)
-- `SESSION_SECRET`
+- `DATABASE_DRIVER=firestore`
+- `FIREBASE_PROJECT_ID=tenderpro-480721` (and the `NEXT_PUBLIC_FIREBASE_*` web config)
+- `FIRESTORE_DATABASE=tenderpro`
+- `FIREBASE_SERVICE_ACCOUNT_JSON` (Firebase Admin service account, server only — required to write to Cloud Firestore)
+- `STORAGE_DRIVER=firebase`
+- `SESSION_SECRET` (long random value, not the example placeholder)
+- `NEXT_PUBLIC_APP_URL` (public origin, no trailing slash)
+- `PAYSTACK_SECRET_KEY` (and optionally `PAYSTACK_WEBHOOK_SECRET`)
+- `DEMO_MODE=false` (unless you intentionally want seeded demo data)
+- `EMAIL_PROVIDER=resend` and `RESEND_API_KEY` so verification and invite emails actually send
 - `AI_PROVIDER` / `AI_MODEL` / `OPENAI_API_KEY` when live extraction is needed
 
-## Database
+## Database (Firebase Firestore)
 
-Schema and RLS live in `supabase/migrations/`.
+`DATABASE_DRIVER=firestore` is the default.
 
-Local/demo: PGlite applies `20260903_init.sql` on boot and seeds demo data.
+| Mode | When it is used | Where data lives |
+| --- | --- | --- |
+| Local document store | No service account / emulator | `.data/firestore/db.json` |
+| Cloud Firestore | `FIREBASE_SERVICE_ACCOUNT_PATH` / `FIREBASE_SERVICE_ACCOUNT_JSON` | Project `tenderpro-480721` |
 
-Supabase:
+Collections are flat (one collection per entity: `profiles`, `organizations`, `invoices`, `tenders`, …). Fields are camelCase. Money is stored as strings. Soft deletes use `deletedAt`.
+
+Access the database through `src/lib/db/repo.ts` (`listByOrg`, `getOrgDoc`, `createDoc`, `patchDoc`). Tenant isolation is enforced by always querying with the authenticated `organizationId`.
+
+Connect this Firebase project (`tenderpro-480721`):
+
+This project’s native Firestore database is named **`tenderpro`** (`FIRESTORE_DATABASE=tenderpro`). There is no `(default)` database.
+
+1. Firebase Console → Project settings → Service accounts → Generate new private key.
+2. Save the file locally (gitignored) and set `FIREBASE_SERVICE_ACCOUNT_PATH`, or paste the JSON into `FIREBASE_SERVICE_ACCOUNT_JSON` (Vercel env, never the browser).
+3. Set `FIREBASE_USE_CLOUD=true`.
+4. Deploy rules and indexes:
 
 ```bash
-# using the Supabase CLI
-supabase start
-psql "$DATABASE_URL" -f supabase/migrations/20260903_init.sql
-psql "$DATABASE_URL" -f supabase/migrations/20260903_rls.sql
-psql "$DATABASE_URL" -f supabase/storage.sql
+npx firebase-tools deploy --only firestore --project tenderpro-480721
 ```
 
-Row Level Security is mandatory on hosted Postgres. The application still enforces membership checks on every mutation.
+Or run the emulator:
+
+```bash
+npx firebase-tools emulators:start --only firestore
+# FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
+```
+
+`firestore.rules` deny all client SDK access. Server actions use the Admin SDK.
+
+Postgres / PGlite remain available behind `DATABASE_DRIVER=postgres` or `pglite` for legacy SQL migrations in `supabase/migrations/`.
 
 ## AI configuration
 
@@ -108,19 +135,43 @@ npm run build
 
 Critical coverage includes money math, invoice balances, payment allocation, due dates, expiry, tender readiness, permission enforcement, AI schema validation and tenant isolation.
 
-## Production deployment (Vercel + Supabase)
+## Production deployment (Vercel + Firebase)
 
-1. Create a Supabase project (Kenya or closest region).
-2. Run the SQL migrations and storage policies.
-3. Set environment variables in Vercel. Leave service-role keys server-side only.
-4. Deploy this repository. Framework is Next.js (`vercel.json`).
-5. Point `NEXT_PUBLIC_APP_URL` and `SUPABASE_AUTH_REDIRECT_URL` at the production domain.
-6. Switch `DEMO_MODE=false` once real auth is live.
-7. Configure Resend, OpenAI and a billing provider when ready. The app runs without them.
+GitHub is already connected to Vercel project **[tenderpro-l233](https://vercel.com/prostevemchumas-projects/tenderpro-l233)** (`prj_umvPHCzYbikwd4eqW2DDZnH04qq7`). Pull requests deploy previews automatically. There is not yet a production deployment of `main`.
+
+Project link for the Vercel CLI is committed at `.vercel/project.json`.
+
+Preview (this branch): https://tenderpro-l233-git-cursor-fireb-01fa49-prostevemchumas-projects.vercel.app
+
+1. This repo is already pointed at Firebase project `tenderpro-480721`.
+2. In [Vercel → Environment Variables](https://vercel.com/prostevemchumas-projects/tenderpro-l233/settings/environment-variables) set:
+
+   - `FIREBASE_SERVICE_ACCOUNT_JSON` (the Admin SDK JSON, server only)
+   - `SESSION_SECRET` (long random value)
+   - `FIRESTORE_DATABASE=tenderpro`
+   - `FIREBASE_PROJECT_ID=tenderpro-480721`
+   - `FIREBASE_USE_CLOUD=true`
+   - `STORAGE_DRIVER=firebase`
+   - `DATABASE_DRIVER=firestore`
+
+   `NEXT_PUBLIC_APP_URL` is optional on Vercel; the app uses `VERCEL_URL` for the current deployment.
+
+   Or, with a [Vercel token](https://vercel.com/account/tokens):
+
+   ```bash
+   VERCEL_TOKEN=... npm run vercel:env
+   ```
+
+3. Deploy `firestore.rules`, `firestore.indexes.json` and `storage.rules`.
+4. Production branch should be `main` (Vercel → Settings → Git). Deploy with **Promote** or `vercel --prod` after merge.
+5. Production defaults `DEMO_MODE` off. Set `DEMO_MODE=true` on Preview if you want the demo login on PR deployments.
+6. Configure Paystack: `PAYSTACK_SECRET_KEY`, webhook `https://<domain>/api/billing/paystack/webhook`.
+7. Configure Resend (`EMAIL_PROVIDER=resend`) so email verification and invites leave the server.
+8. Configure OpenAI when live extraction is needed. The app can run with `AI_PROVIDER=mock`.
 
 ## Security notes
 
-- Tenant isolation is enforced in application code and RLS.
+- Tenant isolation is enforced in application code (`listByOrg` / `getOrgDoc`). Firestore rules deny client access.
 - Uploads are size-limited, MIME-sniffed and treated as untrusted.
 - Prompt injection in tender PDFs cannot override application instructions.
 - Audit logs store who did what, not secrets.

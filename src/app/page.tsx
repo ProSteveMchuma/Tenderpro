@@ -2,6 +2,7 @@ import Link from "next/link";
 import { APP_NAME, APP_TAGLINE, PLAN_PRICES_KES } from "@/lib/constants";
 import { PLANS } from "@/lib/entitlements";
 import { formatMoney } from "@/lib/money";
+import { isDemoMode } from "@/lib/config/runtime";
 
 const problems = [
   "Tender requirements scatter across PDFs, WhatsApp and email.",
@@ -21,6 +22,7 @@ const features = [
 const steps = ["Find the opportunity", "Win the bid", "Deliver and collect", "See the profit"];
 
 export default function LandingPage() {
+  const demo = isDemoMode();
   return (
     <div className="min-h-screen bg-background">
       <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
@@ -53,10 +55,12 @@ export default function LandingPage() {
             Start Free Trial
           </Link>
           <Link href="/login" className="rounded-lg border px-4 py-2 text-sm">
-            View Demo
+            {demo ? "View Demo" : "Sign in"}
           </Link>
         </div>
-        <p className="mt-3 text-xs text-muted-foreground">Demo login: steve@acmesupplies.ke / DemoPass123!</p>
+        {demo ? (
+          <p className="mt-3 text-xs text-muted-foreground">Demo login: steve@acmesupplies.ke / DemoPass123!</p>
+        ) : null}
       </section>
       <section className="border-y bg-muted/30">
         <div className="mx-auto grid max-w-6xl gap-6 px-6 py-16 md:grid-cols-2">
@@ -138,6 +142,17 @@ export default function LandingPage() {
       <footer className="border-t px-6 py-8 text-sm text-muted-foreground">
         <div className="mx-auto flex max-w-6xl flex-wrap justify-between gap-3">
           <span>{APP_NAME}</span>
+          <nav className="flex gap-4">
+            <Link href="/terms" className="hover:text-foreground">
+              Terms
+            </Link>
+            <Link href="/privacy" className="hover:text-foreground">
+              Privacy
+            </Link>
+            <Link href="/pricing" className="hover:text-foreground">
+              Pricing
+            </Link>
+          </nav>
           <span>From Tender to Payment.</span>
         </div>
       </footer>

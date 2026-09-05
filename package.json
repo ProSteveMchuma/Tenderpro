@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "db:seed": "tsx src/lib/db/seed.ts"
+    "db:seed": "tsx src/lib/db/seed.ts",
+    "vercel:env": "node scripts/vercel-env.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
@@ -30,6 +31,8 @@
     "decimal.js": "^10.6.0",
     "drizzle-orm": "^0.45.2",
     "exceljs": "^4.4.0",
+    "firebase": "^12.18.0",
+    "firebase-admin": "^14.3.0",
     "lucide-react": "^1.40.0",
     "mammoth": "^1.12.2",
     "nanoid": "^6.0.1",

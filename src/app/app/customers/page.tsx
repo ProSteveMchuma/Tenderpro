@@ -1,25 +1,26 @@
 import Link from "next/link";
-import { query } from "@/lib/db/client";
+import { listByOrg } from "@/lib/db/repo";
+import { asString, moneyString } from "@/lib/db/types";
 import { requirePermission } from "@/lib/auth/session";
 import { EmptyState, PageHeader } from "@/components/shared/chrome";
-import { formatMoney } from "@/lib/money";
+import { addMoney, formatMoney } from "@/lib/money";
 
 export default async function CustomersPage() {
   const ctx = await requirePermission("customers.read");
-  const rows = await query<{
-    id: string;
-    name: string;
-    type: string;
-    payment_terms_days: number;
-    totalSales: string;
-    outstanding: string;
-  }>(
-    `select c.id, c.name, c.type, c.payment_terms_days,
-            coalesce((select sum(total) from invoices i where i.customer_id=c.id and i.deleted_at is null),0)::text as "totalSales",
-            coalesce((select sum(outstanding) from invoices i where i.customer_id=c.id and i.deleted_at is null),0)::text as outstanding
-     from customers c where c.organization_id=$1 and c.deleted_at is null order by c.name`,
-    [ctx.membership.organizationId],
-  );
+  const orgId = ctx.membership.organizationId;
+  const customers = await listByOrg("customers", orgId, { orderBy: [{ field: "name", direction: "asc" }] });
+  const invoices = await listByOrg("invoices", orgId);
+  const rows = customers.map((customer) => {
+    const related = invoices.filter((invoice) => asString(invoice.customerId) === asString(customer.id));
+    return {
+      id: asString(customer.id),
+      name: asString(customer.name),
+      type: asString(customer.type),
+      paymentTermsDays: Number(customer.paymentTermsDays ?? 0),
+      totalSales: related.reduce((sum, invoice) => addMoney(sum, moneyString(invoice.total)), "0"),
+      outstanding: related.reduce((sum, invoice) => addMoney(sum, moneyString(invoice.outstanding)), "0"),
+    };
+  });
   return (
     <div>
       <PageHeader
@@ -54,7 +55,7 @@ export default async function CustomersPage() {
                     </Link>
                   </td>
                   <td className="px-3 py-2 capitalize">{row.type.replaceAll("_", " ")}</td>
-                  <td className="px-3 py-2">{row.payment_terms_days} days</td>
+                  <td className="px-3 py-2">{row.paymentTermsDays} days</td>
                   <td className="px-3 py-2 tabular-nums">{formatMoney(row.totalSales, ctx.membership.currency)}</td>
                   <td className="px-3 py-2 tabular-nums">{formatMoney(row.outstanding, ctx.membership.currency)}</td>
                 </tr>

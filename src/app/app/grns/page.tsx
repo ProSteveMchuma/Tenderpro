@@ -1,16 +1,22 @@
 import Link from "next/link";
-import { query } from "@/lib/db/client";
+import { listByOrg } from "@/lib/db/repo";
+import { asString } from "@/lib/db/types";
 import { requirePermission } from "@/lib/auth/session";
 import { PageHeader, StatusBadge } from "@/components/shared/chrome";
 
 export default async function GrnPage() {
   const ctx = await requirePermission("grns.read");
-  const rows = await query<{ id: string; number: string; status: string; grn_date: string | null; po: string | null }>(
-    `select g.id, g.number, g.status, g.grn_date::text, po.number as po
-     from goods_receipts g left join purchase_orders po on po.id=g.purchase_order_id
-     where g.organization_id=$1 and g.deleted_at is null order by g.created_at desc`,
-    [ctx.membership.organizationId],
-  );
+  const orgId = ctx.membership.organizationId;
+  const grns = await listByOrg("goods_receipts", orgId, { orderBy: [{ field: "createdAt", direction: "desc" }] });
+  const pos = await listByOrg("purchase_orders", orgId);
+  const poById = new Map(pos.map((row) => [asString(row.id), asString(row.number)]));
+  const rows = grns.map((row) => ({
+    id: asString(row.id),
+    number: asString(row.number),
+    status: asString(row.status),
+    grnDate: row.grnDate ? asString(row.grnDate) : null,
+    po: poById.get(asString(row.purchaseOrderId)) ?? null,
+  }));
   return (
     <div>
       <PageHeader title="GRNs" action={<Link className="rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground" href="/app/grns/new">Record GRN</Link>} />
@@ -22,7 +28,7 @@ export default async function GrnPage() {
               <tr key={row.id} className="border-t">
                 <td className="px-3 py-2">{row.number}</td>
                 <td className="px-3 py-2">{row.po}</td>
-                <td className="px-3 py-2">{row.grn_date}</td>
+                <td className="px-3 py-2">{row.grnDate}</td>
                 <td className="px-3 py-2"><StatusBadge value={row.status} /></td>
               </tr>
             ))}
